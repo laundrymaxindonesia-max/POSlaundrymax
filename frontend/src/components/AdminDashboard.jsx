@@ -710,13 +710,16 @@ export default function AdminDashboard() {
           className="flex items-center gap-2.5"
           data-testid="admin-auth-badge"
         >
-          <div className="hidden sm:flex flex-col items-end leading-tight">
-            <span className="text-[10px] uppercase tracking-widest font-heading font-bold text-[#FFD700]">
+          <div className="flex flex-col items-end leading-tight">
+            <span className="text-[9px] sm:text-[10px] uppercase tracking-widest font-heading font-bold text-[#FFD700]">
               Superadmin
             </span>
-            <span className="text-white/70 text-xs font-mono flex items-center gap-1.5">
+            <span className="hidden sm:flex text-white/70 text-xs font-mono items-center gap-1.5">
               <Mail size={10} className="text-white/40" />
               {ADMIN_EMAIL}
+            </span>
+            <span className="sm:hidden text-white/60 text-[10px] font-mono">
+              theomahrizal@…
             </span>
           </div>
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FFD700] to-[#E6C200] flex items-center justify-center text-black font-heading font-extrabold text-sm shadow-[0_0_15px_rgba(255,215,0,0.4)]">
