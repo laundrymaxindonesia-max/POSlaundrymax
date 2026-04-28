@@ -24,6 +24,7 @@ import {
   Truck,
   Bike,
   Store,
+  Building2,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -76,30 +77,10 @@ const KILOAN_PRICE = 6000;
 
 const SOURCE_OPTIONS = [
   { id: "walkin", label: "Walk-in", sub: "Langsung datang ke outlet", Icon: Store, minKg: 2.0 },
-  { id: "tamel", label: "Outlet Tamel", sub: "Pickup dari Hotel Tamel", Icon: Building, minKg: 0 },
+  { id: "tamel", label: "Outlet Tamel", sub: "Pickup dari Hotel Tamel", Icon: Building2, minKg: 0 },
   { id: "anter", label: "Anter Jemput", sub: "Dijemput kurir ke lokasi", Icon: Bike, minKg: 3.0 },
   { id: "kosan", label: "Kosan Kerjasama", sub: "B2B — diskon 10%", Icon: Truck, minKg: 0 },
 ];
-
-// Use a small Building2-like fallback for Tamel (lucide "Building" not imported but we'll inline)
-function Building(props) {
-  return (
-    <svg
-      width={props.size || 18}
-      height={props.size || 18}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={props.strokeWidth || 2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect width="16" height="20" x="4" y="2" rx="2" />
-      <path d="M9 22v-4h6v4" />
-      <path d="M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01" />
-    </svg>
-  );
-}
 
 const MOCK_ORDERS = [
   { id: "LND-001", customer: "Budi Santoso", kg: 4.5, date: "28 Feb 2026", stage: 3 },

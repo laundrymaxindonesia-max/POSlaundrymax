@@ -16,8 +16,16 @@ Mobile-first three-role ops app + Admin Command Center for a laundry business "L
 - **Superadmin** — monitor KPI, atur multi-tier pricing, lihat laporan pegawai, monitor kuota B2B.
 
 ## What's Been Implemented
-### Segment 1 — Cashier POS (/) — iter_1 100%
-4-tab order input (Kiloan/Satuan/Sepatu&Karpet/Showcase), customer dropdown w/ 10% Member discount, photo evidence, sticky total, QR-code save modal.
+### Segment 1 — Cashier POS (/) — iter_1, iter_5 100%
+4-tab order input (Kiloan/Satuan/Sepatu&Karpet/Showcase). **MAJOR UX OVERHAUL (iter_5)** adds 7 real-world features:
+- Top **search bar** with autocomplete → tracking modal with horizontal stepper (Antrian→Cuci→Kering→Setrika→Packing→OTW).
+- **Nama Pelanggan** text input + **Sumber Order** select (Walk-in/Outlet Tamel/Anter Jemput/Kosan Kerjasama); Kosan = 10% discount.
+- Kiloan **manually typable** number input + ±0.5 kg buttons; min kg enforced per source (Walk-in 2.0 / Anter Jemput 3.0).
+- **Hitung Detail Item** collapsible inside Kiloan — counters for kemeja/celana/kaos/CD/kaos-kaki that don't affect price.
+- **Multi-photo evidence**: thumbnail grid with remove buttons.
+- **Payment toggle** Lunas / Bayar Nanti; if Lunas → mandatory "UPLOAD BUKTI BAYAR" with thumbnail; save blocked until valid.
+- Save validation: name required → items required → payment proof required (if Lunas).
+- QR save modal unchanged (with payment status badge + source label).
 
 ### Segment 2 — Production Scanner (/production) — iter_2 100%
 2×2 chunky station grid (WASH/DRY/IRON/PACK), animated scanner modal (1.5s mock), Recent Scans list with colored badges.
