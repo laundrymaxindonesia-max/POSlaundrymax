@@ -1,0 +1,76 @@
+{
+  "project_name": "LaundryMax Cashier POS",
+  "theme_archetype": "High-Contrast Tactical / Wolverine Theme",
+  "colors": {
+    "primary": "#FFD700",
+    "primary_hover": "#E6C200",
+    "background_base": "#111111",
+    "surface": "#1A1A1A",
+    "text_main": "#FFFFFF",
+    "text_muted": "#A0A0A0",
+    "text_accent": "#FFD700",
+    "text_inverted": "#000000"
+  },
+  "typography": {
+    "headings": "Outfit, sans-serif",
+    "body": "Poppins, sans-serif",
+    "rules": "Avoid default sans for headings. Use Outfit for a modern, technical POS feel. Use Poppins for readable body text, labels, and numbers. Headings must have tracking-tight."
+  },
+  "layout_spacing": {
+    "container": "Mobile-first width (max-w-md mx-auto) for tablet/desktop to simulate a dedicated POS terminal screen. Full width on mobile.",
+    "padding": "Generous padding inside cards (p-4 to p-6).",
+    "glassmorphism": "bg-white/5 backdrop-blur-xl border border-white/10 for cards, bottom bar, and dropdowns to add depth over the deep black."
+  },
+  "components": {
+    "header": {
+      "style": "Sticky top, z-50, backdrop-blur-lg bg-[#111111]/80 border-b border-white/10 p-4 flex justify-between items-center.",
+      "elements": "App Title (LaundryMax Cashier) in Outfit Bold #FFD700, and circular User Profile Icon."
+    },
+    "customer_dropdown": {
+      "style": "Shadcn Select or custom dropdown. bg-[#1A1A1A] border border-white/10 text-white. Focus rings must be #FFD700.",
+      "options": "Walk-in (Harga Normal), Member Kostunpad (Harga Khusus - 10% Discount)."
+    },
+    "tabs": {
+      "style": "4 Tabs (Kiloan, Satuan, Sepatu & Karpet, Showcase).",
+      "active_state": "bg-[#FFD700] text-black font-semibold rounded-lg shadow-[0_0_15px_rgba(255,215,0,0.3)]",
+      "inactive_state": "text-white/60 hover:text-white"
+    },
+    "order_inputs": {
+      "style": "Bento-style grid or vertical list of items. Big +/- Counter buttons (w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-xl active:scale-90 transition-transform)."
+    },
+    "photo_button": {
+      "style": "Massive full-width button. p-6 rounded-2xl border-2 border-dashed border-[#FFD700]/50 bg-[#FFD700]/10 text-[#FFD700] flex flex-col items-center justify-center gap-2 active:scale-[0.98] transition-all hover:bg-[#FFD700]/20.",
+      "text": "📸 AMBIL FOTO CUCIAAN"
+    },
+    "sticky_bottom_bar": {
+      "style": "fixed bottom-0 max-w-md w-full p-4 md:p-6 backdrop-blur-2xl bg-[#111111]/90 border-t border-white/10 flex flex-col gap-3 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-50.",
+      "elements": "Row 1: Total Harga label (muted) and Dynamic Price (large, bold #FFD700). Row 2: SIMPAN & CETAK QR CODE button (w-full p-4 bg-[#FFD700] text-black font-bold rounded-xl active:scale-95 transition-transform)."
+    }
+  },
+  "animations": {
+    "micro_interactions": "All buttons, counters, and tabs must have active:scale-95 or active:scale-90 transition-all duration-200.",
+    "page_load": "Framer motion staggered fade-up for list items."
+  },
+  "media_urls": [
+    {
+      "category": "user_profile_avatar",
+      "description": "Professional avatar for the cashier logged into the POS",
+      "url": "https://images.unsplash.com/photo-1672685667592-0392f458f46f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODl8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBwb3J0cmFpdCUyMGhlYWRzaG90fGVufDB8fHx8MTc3NzM1MTkxMHww&ixlib=rb-4.1.0&q=85"
+    }
+  ],
+  "testing_attributes": [
+    "data-testid='header-title'",
+    "data-testid='user-profile-avatar'",
+    "data-testid='customer-type-dropdown'",
+    "data-testid='tab-kiloan'",
+    "data-testid='tab-satuan'",
+    "data-testid='tab-sepatu-karpet'",
+    "data-testid='tab-showcase'",
+    "data-testid='item-counter-decrease'",
+    "data-testid='item-counter-increase'",
+    "data-testid='photo-upload-button'",
+    "data-testid='total-price-display'",
+    "data-testid='save-print-button'"
+  ],
+  "instructions_to_main_agent": "Implement a pure mobile-first view (max-w-md mx-auto) with a very dark background (#111111) and bright yellow (#FFD700) accents. Use Outfit for headings and Poppins for the body. Apply subtle glassmorphism (bg-white/5 backdrop-blur-md) on internal cards to separate them from the pure black background. Ensure the bottom action bar is strictly fixed to the bottom and does not overlap scrollable content (add pb-32 to the main container). Implement all functionalities with interactive react state (dropdown selection, tabs, counter buttons, total price calculation). Do not use placeholder text for images; use the provided media_urls."
+}
