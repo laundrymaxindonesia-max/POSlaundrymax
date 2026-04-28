@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import POSScreen from "@/components/POSScreen";
 import ProductionScanner from "@/components/ProductionScanner";
 import CourierDashboard from "@/components/CourierDashboard";
+import AdminDashboard from "@/components/AdminDashboard";
 import { Toaster } from "@/components/ui/sonner";
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
           <Route path="/" element={<POSScreen />} />
           <Route path="/production" element={<ProductionScanner />} />
           <Route path="/courier" element={<CourierDashboard />} />
+          <Route path="/admin" element={<AdminDashboard />} />
         </Routes>
       </BrowserRouter>
       <Toaster
