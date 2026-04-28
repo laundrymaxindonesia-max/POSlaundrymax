@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
   Waves,
   Flame,
   Shirt,
@@ -14,10 +12,12 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import HeaderNav from "@/components/HeaderNav";
 
 const STATIONS = [
   {
@@ -71,7 +71,6 @@ const INITIAL_SCANS = [
 ];
 
 export default function ProductionScanner() {
-  const navigate = useNavigate();
   const [scanOpen, setScanOpen] = useState(false);
   const [activeStation, setActiveStation] = useState(null);
   const [recentScans, setRecentScans] = useState(INITIAL_SCANS);
@@ -129,44 +128,26 @@ export default function ProductionScanner() {
     >
       {/* Header */}
       <header
-        className="sticky top-0 z-40 glass-strong border-b border-white/10 px-4 py-4 flex items-center justify-between"
+        className="sticky top-0 z-40 glass-strong border-b border-white/10 px-4 py-3 flex items-center justify-between gap-2"
         data-testid="production-header"
       >
-        <button
-          onClick={() => navigate("/")}
-          data-testid="back-to-cashier-button"
-          className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white hover:bg-white/10 hover:border-[#FFD700]/40 transition-all active:scale-90"
-          aria-label="Back to cashier"
-        >
-          <ArrowLeft size={18} />
-        </button>
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-[#FFD700] flex items-center justify-center shadow-[0_0_20px_rgba(255,215,0,0.35)]">
             <Factory size={18} className="text-black" strokeWidth={2.5} />
           </div>
           <div>
             <div
-              className="font-heading font-extrabold text-[#FFD700] text-lg leading-none tracking-tight"
+              className="font-heading font-extrabold text-[#FFD700] text-base leading-none tracking-tight"
               data-testid="production-title"
             >
               LaundryMax
             </div>
-            <div className="text-white/50 text-[11px] uppercase tracking-[0.15em] mt-0.5">
-              Production
+            <div className="text-white/50 text-[10px] uppercase tracking-[0.15em] mt-0.5">
+              Production · <span className="text-[#FFD700]" data-testid="active-orders-count">{activeOrdersCount}</span> aktif
             </div>
           </div>
         </div>
-        <div className="w-10 h-10 rounded-xl glass flex flex-col items-center justify-center">
-          <div
-            className="font-heading font-extrabold text-[#FFD700] text-sm leading-none"
-            data-testid="active-orders-count"
-          >
-            {activeOrdersCount}
-          </div>
-          <div className="text-white/40 text-[8px] uppercase tracking-wider mt-0.5">
-            Aktif
-          </div>
-        </div>
+        <HeaderNav />
       </header>
 
       <main className="px-4 pt-5 pb-8 space-y-6">

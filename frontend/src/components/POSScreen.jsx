@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Minus,
   Plus,
@@ -13,7 +12,6 @@ import {
   X,
   CheckCircle2,
   Printer,
-  Factory,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -32,9 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { QRCodeCanvas } from "qrcode.react";
-
-const AVATAR_URL =
-  "https://images.unsplash.com/photo-1672685667592-0392f458f46f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODl8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBwb3J0cmFpdCUyMGhlYWRzaG90fGVufDB8fHx8MTc3NzM1MTkxMHww&ixlib=rb-4.1.0&q=85";
+import HeaderNav from "@/components/HeaderNav";
 
 const SATUAN_ITEMS = [
   { id: "kemeja", name: "Kemeja", price: 15000 },
@@ -114,7 +110,6 @@ const ItemRow = ({ item, count, onInc, onDec, idx }) => (
 );
 
 export default function POSScreen() {
-  const navigate = useNavigate();
   const [customerType, setCustomerType] = useState("walkin");
   const [activeTab, setActiveTab] = useState("kiloan");
   const [kiloanKg, setKiloanKg] = useState(0);
@@ -200,50 +195,26 @@ export default function POSScreen() {
     >
       {/* Header */}
       <header
-        className="sticky top-0 z-40 glass-strong border-b border-white/10 px-5 py-4 flex items-center justify-between"
+        className="sticky top-0 z-40 glass-strong border-b border-white/10 px-4 py-3 flex items-center justify-between gap-2"
         data-testid="pos-header"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#FFD700] flex items-center justify-center shadow-[0_0_20px_rgba(255,215,0,0.4)]">
-            <Shirt size={20} className="text-black" strokeWidth={2.5} />
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-[#FFD700] flex items-center justify-center shadow-[0_0_20px_rgba(255,215,0,0.4)]">
+            <Shirt size={18} className="text-black" strokeWidth={2.5} />
           </div>
           <div>
             <div
-              className="font-heading font-extrabold text-[#FFD700] text-lg leading-none tracking-tight"
+              className="font-heading font-extrabold text-[#FFD700] text-base leading-none tracking-tight"
               data-testid="header-title"
             >
               LaundryMax
             </div>
-            <div className="text-white/50 text-[11px] uppercase tracking-[0.15em] mt-0.5">
+            <div className="text-white/50 text-[10px] uppercase tracking-[0.15em] mt-0.5">
               Cashier
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigate("/production")}
-            data-testid="goto-production-button"
-            className="h-10 px-3 rounded-xl glass border-white/10 hover:border-[#FFD700]/50 transition-all active:scale-95 flex items-center gap-1.5 text-white/80 hover:text-[#FFD700]"
-            aria-label="Production scanner"
-          >
-            <Factory size={16} strokeWidth={2.25} />
-            <span className="text-[11px] font-heading font-bold uppercase tracking-wider">
-              Produksi
-            </span>
-          </button>
-          <button
-            className="relative group"
-            data-testid="user-profile-avatar"
-            aria-label="User profile"
-          >
-            <div className="absolute inset-0 rounded-full bg-[#FFD700]/30 blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
-            <img
-              src={AVATAR_URL}
-              alt="Cashier"
-              className="relative w-10 h-10 rounded-full object-cover border-2 border-[#FFD700] transition-transform active:scale-95"
-            />
-          </button>
-        </div>
+        <HeaderNav />
       </header>
 
       {/* Main content */}
