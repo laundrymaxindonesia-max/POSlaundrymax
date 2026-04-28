@@ -299,6 +299,9 @@ export default function ProductionScanner() {
               <ScanLine size={18} />
               Scanning — {activeStation?.label}
             </DialogTitle>
+            <DialogDescription className="text-white/50 text-xs">
+              Sorot QR code tag cucian untuk memperbarui status stasiun.
+            </DialogDescription>
           </DialogHeader>
 
           {/* Scanner viewport */}

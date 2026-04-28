@@ -1,40 +1,49 @@
-# LaundryMax Cashier POS — PRD
+# LaundryMax — PRD
 
 ## Original Problem Statement
-Modern, mobile-first Point of Sale (POS) / Input Order screen for a laundry app named "LaundryMax", built with React + Tailwind. Strict "Wolverine" theme: Bright Yellow (#FFD700) accents + Deep Black (#111111/#1A1A1A) backgrounds, glassmorphism cards, micro-animations. Features: header, customer dropdown (Walk-in vs Member Kostunpad −10%), 4 tabs (Kiloan Rp6.000/kg, Satuan Rp15.000, Sepatu&Karpet Rp30.000, Showcase Rp20.000), massive photo-evidence button, sticky bottom action bar with dynamic total + "SIMPAN & CETAK QR CODE".
+Mobile-first POS/Input Order screen + Production Scanner Dashboard for a laundry app "LaundryMax". Strict "Wolverine" theme: Bright Yellow (#FFD700) + Deep Black (#111111/#1A1A1A). Built with React + Tailwind + shadcn UI.
 
 ## Architecture
-- **Frontend only**: React 19, Tailwind, shadcn UI (Tabs, Select, Dialog), Sonner toasts, lucide-react icons, qrcode.react for QR generation.
-- Single-component app (`POSScreen.jsx`) rendered by `App.js`. No backend / DB.
-- Fonts: Outfit (headings) + Poppins (body), loaded via Google Fonts.
+- **Frontend only**. React 19 + react-router-dom, Tailwind, shadcn UI (Tabs/Select/Dialog), Sonner toasts, lucide-react, qrcode.react.
+- Routes: `/` → Cashier POS · `/production` → Production Scanner.
+- Typography: Outfit (headings) + Poppins (body) from Google Fonts.
 
 ## User Personas
-- **Kasir laundry** on mobile tablet/phone — needs fast tap-friendly input + photo evidence + QR receipt.
+- **Kasir** (cashier) — input order cucian di konter.
+- **Pekerja produksi** — scan QR untuk update status (Wash → Dry → Iron → Pack).
 
 ## Core Requirements (Static)
-- Wolverine palette only (yellow/black/white).
-- All interactive elements have kebab-case `data-testid`.
-- Mobile-first (`max-w-md mx-auto`) with sticky bottom bar that never overlaps scroll content (`pb-40`).
+- Wolverine palette; glassmorphism cards; kebab-case `data-testid` on every interactive element.
+- Mobile-first (`max-w-md mx-auto`), sticky elements must never overlap scroll content.
 
-## What's Been Implemented (2026-02)
-- Header with app brand + avatar.
-- Customer-type shadcn Select with live 10% member-discount badge.
-- 4-tab order input (Kiloan/Satuan/Sepatu&Karpet/Showcase) with big ±0.5kg and ±1 pcs counters.
-- Dynamic subtotal/discount/total computed via `useMemo`.
-- Photo-evidence button with MOCKED R2 upload modal (900ms spinner → success state).
-- QR-code modal (qrcode.react) with generated order ID `LM-YYMMDDHHMMSS-###`, print toast, and "Order Baru" full-state reset.
-- Glassmorphism, grain overlay, pulse-yellow CTA animation, active:scale micro-interactions.
-- Testing agent iteration_1: 100% frontend pass.
+## What's Been Implemented
+### 2026-02 · Segment 1 — Cashier POS (/)
+- Header (brand + Production quick-jump + avatar).
+- Customer dropdown with 10% Member Kostunpad discount badge.
+- 4-tab order input: Kiloan ±0.5kg @Rp6.000/kg, Satuan @Rp15.000, Sepatu&Karpet @Rp30.000, Showcase @Rp20.000.
+- Massive "AMBIL FOTO CUCIAAN" evidence button (MOCKED R2 upload 900 ms).
+- Sticky bottom total bar + "SIMPAN & CETAK QR CODE" → QR modal (qrcode.react) with generated `LM-YYMMDDHHMMSS-###` order ID, print toast, and Order Baru reset.
+- Testing iteration_1 = 100% pass (14 flows).
+
+### 2026-02 · Segment 2 — Production Scanner (/production)
+- Header with back button, brand badge, live active-orders counter.
+- 2×2 chunky tactile station grid (WASH blue, DRY orange, IRON yellow, PACK green) with distinct icon colors, ambient glow, corner-blink indicator, active:scale tap anim.
+- Scanner modal: dark viewport with animated scanning line (CSS `animate-scan-line`), QR corner brackets, LIVE indicator, camera noise overlay. Auto-confirm in 1.5s → sonner success toast "Order LND-XXX Status Updated!" and prepended row in Recent Scans. Cancel button aborts timer cleanly.
+- Recent Scans list: 5 seeded mock orders with colored status badges.
+- Accessibility: added `DialogDescription` to all 3 dialogs.
+- Testing iteration_2 = 100% pass (9 flows).
 
 ## MOCKED / Not Real
-- Camera / Cloudflare R2 upload (setTimeout simulation only).
-- Receipt printing (toast success only).
-- Order ID issuance (client-side, not server-authoritative).
+- Camera / R2 upload (setTimeout simulation).
+- QR scanner (setTimeout 1.5s with random order ID).
+- Receipt printing (toast only).
+- Orders in Production list are client-side state only.
 
 ## Backlog
-- **P1**: Add FastAPI + MongoDB backend to persist orders; wire save button to POST /api/orders.
-- **P1**: Real camera (`getUserMedia`) + actual R2 / object-storage upload.
-- **P2**: Customer database (autocomplete by phone/name instead of 2-option dropdown).
-- **P2**: Order history / daily sales report screen.
-- **P2**: ESC/POS receipt printer bridge + thermal-print layout.
-- **P3**: Auth + multi-outlet support.
+- **P1** FastAPI + MongoDB: `/api/orders` (create, list, update-status by order_id from QR), replace all client-side mocks.
+- **P1** Real camera: `getUserMedia` + object-storage (R2) for evidence photos; `jsQR` / `html5-qrcode` for real scanning.
+- **P2** Customer DB with autocomplete (phone/name) replacing 2-option dropdown.
+- **P2** Daily sales dashboard (revenue per tab Kiloan/Satuan/Sepatu/Showcase).
+- **P2** Auth (cashier vs worker roles) + multi-outlet support.
+- **P2** Thermal printer (ESC/POS) for actual receipts.
+- **P3** Push notification to customer when status = READY.

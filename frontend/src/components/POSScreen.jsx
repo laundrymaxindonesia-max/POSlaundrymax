@@ -26,6 +26,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -503,6 +504,9 @@ export default function POSScreen() {
             <DialogTitle className="font-heading font-bold text-[#FFD700]">
               Kamera Bukti Cucian
             </DialogTitle>
+            <DialogDescription className="text-white/50 text-xs">
+              Foto sedang diunggah ke object storage sebagai bukti terima.
+            </DialogDescription>
           </DialogHeader>
           <div className="aspect-square rounded-2xl bg-gradient-to-br from-white/5 to-white/0 border border-white/10 flex items-center justify-center overflow-hidden relative">
             {!photoTaken ? (
@@ -539,6 +543,9 @@ export default function POSScreen() {
             <DialogTitle className="font-heading font-bold text-[#FFD700] text-xl">
               Order Tersimpan
             </DialogTitle>
+            <DialogDescription className="text-white/50 text-xs">
+              Scan QR code berikut di stasiun produksi untuk memperbarui status.
+            </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center gap-4 py-2">
             <div className="bg-white p-4 rounded-2xl shadow-[0_0_40px_rgba(255,215,0,0.2)]">
