@@ -1,11 +1,18 @@
 import "@/App.css";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import POSScreen from "@/components/POSScreen";
+import ProductionScanner from "@/components/ProductionScanner";
 import { Toaster } from "@/components/ui/sonner";
 
 function App() {
   return (
     <div className="App grain">
-      <POSScreen />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<POSScreen />} />
+          <Route path="/production" element={<ProductionScanner />} />
+        </Routes>
+      </BrowserRouter>
       <Toaster
         position="top-center"
         theme="dark"

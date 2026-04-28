@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Minus,
   Plus,
@@ -12,6 +13,7 @@ import {
   X,
   CheckCircle2,
   Printer,
+  Factory,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -111,6 +113,7 @@ const ItemRow = ({ item, count, onInc, onDec, idx }) => (
 );
 
 export default function POSScreen() {
+  const navigate = useNavigate();
   const [customerType, setCustomerType] = useState("walkin");
   const [activeTab, setActiveTab] = useState("kiloan");
   const [kiloanKg, setKiloanKg] = useState(0);
@@ -215,18 +218,31 @@ export default function POSScreen() {
             </div>
           </div>
         </div>
-        <button
-          className="relative group"
-          data-testid="user-profile-avatar"
-          aria-label="User profile"
-        >
-          <div className="absolute inset-0 rounded-full bg-[#FFD700]/30 blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
-          <img
-            src={AVATAR_URL}
-            alt="Cashier"
-            className="relative w-10 h-10 rounded-full object-cover border-2 border-[#FFD700] transition-transform active:scale-95"
-          />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate("/production")}
+            data-testid="goto-production-button"
+            className="h-10 px-3 rounded-xl glass border-white/10 hover:border-[#FFD700]/50 transition-all active:scale-95 flex items-center gap-1.5 text-white/80 hover:text-[#FFD700]"
+            aria-label="Production scanner"
+          >
+            <Factory size={16} strokeWidth={2.25} />
+            <span className="text-[11px] font-heading font-bold uppercase tracking-wider">
+              Produksi
+            </span>
+          </button>
+          <button
+            className="relative group"
+            data-testid="user-profile-avatar"
+            aria-label="User profile"
+          >
+            <div className="absolute inset-0 rounded-full bg-[#FFD700]/30 blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
+            <img
+              src={AVATAR_URL}
+              alt="Cashier"
+              className="relative w-10 h-10 rounded-full object-cover border-2 border-[#FFD700] transition-transform active:scale-95"
+            />
+          </button>
+        </div>
       </header>
 
       {/* Main content */}
