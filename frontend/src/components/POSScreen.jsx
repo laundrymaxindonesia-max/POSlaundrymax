@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Minus,
   Plus,
@@ -12,6 +12,18 @@ import {
   X,
   CheckCircle2,
   Printer,
+  Search,
+  Package,
+  ChevronDown,
+  ChevronUp,
+  Wallet,
+  Clock,
+  Receipt,
+  Calendar,
+  Trash2,
+  Truck,
+  Bike,
+  Store,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -52,16 +64,63 @@ const SHOWCASE_ITEMS = [
   { id: "detergen", name: "Detergen Kiloan", price: 20000 },
 ];
 
+const KILOAN_DETAIL_ITEMS = [
+  { id: "kemeja", name: "Kemeja" },
+  { id: "celana", name: "Celana" },
+  { id: "kaos", name: "Kaos" },
+  { id: "celana_dalam", name: "Celana Dalam" },
+  { id: "kaos_kaki", name: "Kaos Kaki" },
+];
+
 const KILOAN_PRICE = 6000;
+
+const SOURCE_OPTIONS = [
+  { id: "walkin", label: "Walk-in", sub: "Langsung datang ke outlet", Icon: Store, minKg: 2.0 },
+  { id: "tamel", label: "Outlet Tamel", sub: "Pickup dari Hotel Tamel", Icon: Building, minKg: 0 },
+  { id: "anter", label: "Anter Jemput", sub: "Dijemput kurir ke lokasi", Icon: Bike, minKg: 3.0 },
+  { id: "kosan", label: "Kosan Kerjasama", sub: "B2B — diskon 10%", Icon: Truck, minKg: 0 },
+];
+
+// Use a small Building2-like fallback for Tamel (lucide "Building" not imported but we'll inline)
+function Building(props) {
+  return (
+    <svg
+      width={props.size || 18}
+      height={props.size || 18}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={props.strokeWidth || 2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect width="16" height="20" x="4" y="2" rx="2" />
+      <path d="M9 22v-4h6v4" />
+      <path d="M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01" />
+    </svg>
+  );
+}
+
+const MOCK_ORDERS = [
+  { id: "LND-001", customer: "Budi Santoso", kg: 4.5, date: "28 Feb 2026", stage: 3 },
+  { id: "LND-002", customer: "Siti Rahayu", kg: 2.0, date: "28 Feb 2026", stage: 2 },
+  { id: "LND-003", customer: "Andi Wijaya", kg: 6.5, date: "28 Feb 2026", stage: 1 },
+  { id: "LND-004", customer: "Ratna Dewi", kg: 3.0, date: "27 Feb 2026", stage: 4 },
+  { id: "LND-005", customer: "Rudi Hartono", kg: 5.5, date: "27 Feb 2026", stage: 5 },
+  { id: "LND-006", customer: "Dina Kurniawan", kg: 1.5, date: "27 Feb 2026", stage: 0 },
+];
+
+const STAGES = ["Antrian", "Cuci", "Kering", "Setrika", "Packing", "OTW/Diambil"];
 
 const formatIDR = (n) =>
   "Rp " + Math.round(n).toLocaleString("id-ID").replace(/,/g, ".");
 
-const CounterBtn = ({ onClick, children, testid, variant = "default" }) => (
+const CounterBtn = ({ onClick, children, testid, variant = "default", disabled = false }) => (
   <button
     onClick={onClick}
     data-testid={testid}
-    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 active:scale-90 ${
+    disabled={disabled}
+    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed ${
       variant === "primary"
         ? "bg-[#FFD700] text-black hover:bg-[#ffdf33] shadow-[0_0_20px_rgba(255,215,0,0.35)]"
         : "bg-white/5 text-white border border-white/10 hover:bg-white/10 hover:border-[#FFD700]/40"
@@ -86,10 +145,7 @@ const ItemRow = ({ item, count, onInc, onDec, idx }) => (
       </div>
     </div>
     <div className="flex items-center gap-3 ml-2">
-      <CounterBtn
-        onClick={onDec}
-        testid={`item-counter-decrease-${item.id}`}
-      >
+      <CounterBtn onClick={onDec} testid={`item-counter-decrease-${item.id}`}>
         <Minus size={18} />
       </CounterBtn>
       <div
@@ -109,20 +165,106 @@ const ItemRow = ({ item, count, onInc, onDec, idx }) => (
   </div>
 );
 
+function TrackingProgress({ stage }) {
+  return (
+    <div className="space-y-3">
+      <div className="relative px-2 pt-8 pb-2">
+        <div className="absolute left-6 right-6 top-12 h-1 bg-white/10 rounded-full" />
+        <div
+          className="absolute left-6 top-12 h-1 bg-gradient-to-r from-[#FFD700] to-[#FFE966] rounded-full transition-all duration-700"
+          style={{
+            width: `calc((100% - 48px) * ${stage / (STAGES.length - 1)})`,
+          }}
+        />
+        <div className="relative flex justify-between">
+          {STAGES.map((s, i) => {
+            const done = i <= stage;
+            return (
+              <div
+                key={s}
+                className="flex flex-col items-center gap-2 flex-1"
+                data-testid={`track-stage-${i}`}
+              >
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                    done
+                      ? "bg-[#FFD700] border-[#FFD700] text-black shadow-[0_0_12px_rgba(255,215,0,0.5)]"
+                      : "bg-[#1a1a1a] border-white/15 text-white/40"
+                  }`}
+                >
+                  {done ? (
+                    <CheckCircle2 size={14} strokeWidth={2.5} />
+                  ) : (
+                    <span className="text-[10px] font-heading font-bold">{i + 1}</span>
+                  )}
+                </div>
+                <span
+                  className={`text-[9px] font-heading font-bold uppercase tracking-wider text-center leading-tight ${
+                    done ? "text-[#FFD700]" : "text-white/40"
+                  }`}
+                >
+                  {s}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function POSScreen() {
-  const [customerType, setCustomerType] = useState("walkin");
+  // Customer
+  const [customerName, setCustomerName] = useState("");
+  const [sumberOrder, setSumberOrder] = useState("walkin");
+
+  // Tabs
   const [activeTab, setActiveTab] = useState("kiloan");
-  const [kiloanKg, setKiloanKg] = useState(0);
+
+  // Kiloan
+  const [kiloanKg, setKiloanKg] = useState(2.0);
+  const [kiloanInput, setKiloanInput] = useState("2.0");
+  const [showKiloanDetail, setShowKiloanDetail] = useState(false);
+  const [kiloanDetail, setKiloanDetail] = useState({});
+
+  // Other tabs
   const [satuanCounts, setSatuanCounts] = useState({});
   const [sepatuCounts, setSepatuCounts] = useState({});
   const [showcaseCounts, setShowcaseCounts] = useState({});
-  const [photoTaken, setPhotoTaken] = useState(false);
+
+  // Evidence photos (multi)
+  const [evidencePhotos, setEvidencePhotos] = useState([]);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
+
+  // Payment
+  const [paymentStatus, setPaymentStatus] = useState("lunas");
+  const [paymentProof, setPaymentProof] = useState(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentUploading, setPaymentUploading] = useState(false);
+
+  // QR / save
   const [qrOpen, setQrOpen] = useState(false);
   const [orderId, setOrderId] = useState("");
 
-  const isMember = customerType === "member";
+  // Search / tracking
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [trackOrder, setTrackOrder] = useState(null);
+
+  const selectedSource = SOURCE_OPTIONS.find((s) => s.id === sumberOrder);
+  const minKg = selectedSource?.minKg ?? 0;
+  const isMember = sumberOrder === "kosan";
   const discountRate = isMember ? 0.1 : 0;
+
+  // Adjust kiloan when source changes
+  useEffect(() => {
+    if (kiloanKg < minKg) {
+      setKiloanKg(minKg);
+      setKiloanInput(minKg.toFixed(1));
+    }
+  }, [minKg, kiloanKg]);
 
   const bumpCount = (setter) => (id, delta) => {
     setter((prev) => {
@@ -130,6 +272,35 @@ export default function POSScreen() {
       const next = Math.max(0, current + delta);
       return { ...prev, [id]: next };
     });
+  };
+
+  const updateKiloanKg = (newVal) => {
+    const clamped = Math.max(minKg, Math.max(0, newVal));
+    setKiloanKg(clamped);
+    setKiloanInput(clamped.toFixed(1));
+  };
+
+  const handleKiloanInputChange = (e) => {
+    const raw = e.target.value.replace(/[^0-9.]/g, "");
+    setKiloanInput(raw);
+    const parsed = parseFloat(raw);
+    if (!isNaN(parsed)) {
+      setKiloanKg(parsed);
+    }
+  };
+
+  const handleKiloanInputBlur = () => {
+    const parsed = parseFloat(kiloanInput);
+    if (isNaN(parsed) || parsed < minKg) {
+      setKiloanKg(minKg);
+      setKiloanInput(minKg.toFixed(1));
+      if (parsed < minKg) {
+        toast.error(`Minimum ${minKg.toFixed(1)} kg untuk ${selectedSource.label}`);
+      }
+    } else {
+      setKiloanKg(parsed);
+      setKiloanInput(parsed.toFixed(1));
+    }
   };
 
   const subtotal = useMemo(() => {
@@ -155,21 +326,68 @@ export default function POSScreen() {
     Object.values(sepatuCounts).filter((v) => v > 0).length +
     Object.values(showcaseCounts).filter((v) => v > 0).length;
 
+  // Photo evidence (multi)
   const handleTakePhoto = () => {
     setPhotoModalOpen(true);
+    setPhotoUploading(true);
     setTimeout(() => {
-      setPhotoTaken(true);
-      toast.success("Foto cucian berhasil disimpan");
+      const newPhoto = {
+        id: `evidence_${Date.now()}`,
+        thumbnail: `hsl(${Math.random() * 60 + 30}, 80%, 55%)`,
+      };
+      setEvidencePhotos((prev) => [...prev, newPhoto]);
+      setPhotoUploading(false);
+      toast.success(`Foto ${evidencePhotos.length + 1} tersimpan`);
     }, 900);
   };
 
+  const handleClosePhotoModal = (open) => {
+    if (!open) {
+      setPhotoUploading(false);
+    }
+    setPhotoModalOpen(open);
+  };
+
+  const removeEvidencePhoto = (id) => {
+    setEvidencePhotos((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  // Payment proof
+  const handlePaymentPhoto = () => {
+    setPaymentModalOpen(true);
+    setPaymentUploading(true);
+    setTimeout(() => {
+      setPaymentProof({
+        id: `payment_${Date.now()}`,
+        method: "Cash",
+        amount: total,
+      });
+      setPaymentUploading(false);
+      toast.success("Bukti bayar tersimpan");
+    }, 900);
+  };
+
+  const handleClosePaymentModal = (open) => {
+    if (!open) setPaymentUploading(false);
+    setPaymentModalOpen(open);
+  };
+
+  // Save validation
+  const saveBlockedReason = useMemo(() => {
+    if (!customerName.trim()) return "Isi nama pelanggan terlebih dahulu";
+    if (total <= 0) return "Tambahkan item terlebih dahulu";
+    if (paymentStatus === "lunas" && !paymentProof)
+      return "Upload bukti pembayaran dulu";
+    return null;
+  }, [customerName, total, paymentStatus, paymentProof]);
+
   const handleSave = () => {
-    if (total <= 0) {
-      toast.error("Tambahkan item terlebih dahulu");
+    if (saveBlockedReason) {
+      toast.error(saveBlockedReason);
       return;
     }
     const id =
-      "LM-" +
+      "LND-" +
       new Date()
         .toISOString()
         .replace(/[-:T.Z]/g, "")
@@ -180,13 +398,42 @@ export default function POSScreen() {
     setQrOpen(true);
   };
 
+  const resetAll = () => {
+    setCustomerName("");
+    setSumberOrder("walkin");
+    setKiloanKg(2.0);
+    setKiloanInput("2.0");
+    setShowKiloanDetail(false);
+    setKiloanDetail({});
+    setSatuanCounts({});
+    setSepatuCounts({});
+    setShowcaseCounts({});
+    setEvidencePhotos([]);
+    setPaymentStatus("lunas");
+    setPaymentProof(null);
+    setQrOpen(false);
+  };
+
   const qrPayload = JSON.stringify({
     order_id: orderId,
-    customer: isMember ? "Member Kostunpad" : "Walk-in",
+    customer: customerName,
+    source: sumberOrder,
     total,
     items: totalItemsCount,
+    paid: paymentStatus === "lunas",
     ts: Date.now(),
   });
+
+  // Search
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return MOCK_ORDERS.filter(
+      (o) =>
+        o.id.toLowerCase().includes(q) ||
+        o.customer.toLowerCase().includes(q)
+    ).slice(0, 5);
+  }, [searchQuery]);
 
   return (
     <div
@@ -217,53 +464,154 @@ export default function POSScreen() {
         <HeaderNav />
       </header>
 
-      {/* Main content */}
-      <main className="px-5 pt-5 pb-40 space-y-5">
-        {/* Customer select */}
-        <section className="animate-fade-up">
-          <label className="text-white/50 text-xs uppercase tracking-widest mb-2 block font-medium">
-            Tipe Pelanggan
-          </label>
-          <Select value={customerType} onValueChange={setCustomerType}>
-            <SelectTrigger
-              data-testid="customer-type-dropdown"
-              className="w-full h-14 glass text-white font-medium text-base rounded-2xl border-white/10 hover:border-[#FFD700]/50 transition-colors focus:ring-[#FFD700] focus:ring-offset-0"
-            >
-              <div className="flex items-center gap-3">
-                <User size={18} className="text-[#FFD700]" />
-                <SelectValue />
-              </div>
-            </SelectTrigger>
-            <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
-              <SelectItem
-                value="walkin"
-                data-testid="customer-option-walkin"
-                className="focus:bg-[#FFD700]/10 focus:text-[#FFD700]"
+      <main className="px-5 pt-4 pb-44 space-y-4">
+        {/* Search bar */}
+        <section className="relative animate-fade-up" data-testid="search-section">
+          <div className="relative">
+            <Search
+              size={16}
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40"
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setSearchOpen(true);
+              }}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => setTimeout(() => setSearchOpen(false), 200)}
+              placeholder="Cari Orderan (ID / nama)..."
+              data-testid="search-input"
+              className="w-full h-12 pl-11 pr-11 rounded-2xl glass text-white placeholder-white/40 text-sm font-medium focus:border-[#FFD700]/50 focus:outline-none transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setSearchOpen(false);
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60"
+                aria-label="Clear search"
               >
-                Walk-in (Harga Normal)
-              </SelectItem>
-              <SelectItem
-                value="member"
-                data-testid="customer-option-member"
-                className="focus:bg-[#FFD700]/10 focus:text-[#FFD700]"
-              >
-                Member Kostunpad (Harga Khusus)
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          {isMember && (
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          {searchOpen && searchResults.length > 0 && (
             <div
-              className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#FFD700]/10 border border-[#FFD700]/30 text-[#FFD700] text-xs font-semibold"
-              data-testid="member-badge"
+              className="absolute top-14 inset-x-0 z-30 glass-strong border border-white/10 rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.6)] animate-fade-up"
+              data-testid="search-results"
             >
-              <CheckCircle2 size={12} />
-              Diskon Member 10% aktif
+              {searchResults.map((r) => (
+                <button
+                  key={r.id}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setTrackOrder(r);
+                    setSearchOpen(false);
+                  }}
+                  data-testid={`search-result-${r.id}`}
+                  className="w-full px-4 py-3 flex items-center justify-between gap-3 hover:bg-white/5 border-b border-white/5 last:border-0 text-left transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-[#FFD700]/10 border border-[#FFD700]/25 flex items-center justify-center flex-shrink-0">
+                      <Package size={14} className="text-[#FFD700]" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-heading font-bold text-white text-sm">
+                        {r.customer}
+                      </div>
+                      <div className="text-white/40 text-[11px] flex items-center gap-1.5">
+                        <span className="font-mono">{r.id}</span>
+                        <span>·</span>
+                        <span>{r.kg} kg</span>
+                        <span>·</span>
+                        <span>{r.date}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full bg-[#FFD700]/15 border border-[#FFD700]/30 text-[#FFD700] text-[9px] font-heading font-bold uppercase tracking-wider flex-shrink-0">
+                    {STAGES[r.stage]}
+                  </span>
+                </button>
+              ))}
             </div>
           )}
         </section>
 
+        {/* Customer block */}
+        <section className="animate-fade-up space-y-3" style={{ animationDelay: "60ms" }}>
+          <div>
+            <label className="text-white/50 text-xs uppercase tracking-widest mb-2 block font-medium">
+              Nama Pelanggan
+            </label>
+            <div className="relative">
+              <User
+                size={16}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-[#FFD700]"
+              />
+              <input
+                type="text"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Masukkan nama pelanggan"
+                data-testid="customer-name-input"
+                className="w-full h-14 pl-11 pr-4 rounded-2xl glass text-white placeholder-white/40 text-base font-medium focus:border-[#FFD700]/50 focus:outline-none transition-colors"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-white/50 text-xs uppercase tracking-widest mb-2 block font-medium">
+              Sumber Order
+            </label>
+            <Select value={sumberOrder} onValueChange={setSumberOrder}>
+              <SelectTrigger
+                data-testid="sumber-order-dropdown"
+                className="w-full h-14 glass text-white font-medium text-base rounded-2xl border-white/10 hover:border-[#FFD700]/50 transition-colors focus:ring-[#FFD700] focus:ring-offset-0"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
+                {SOURCE_OPTIONS.map((opt) => (
+                  <SelectItem
+                    key={opt.id}
+                    value={opt.id}
+                    data-testid={`sumber-option-${opt.id}`}
+                    className="focus:bg-[#FFD700]/10 focus:text-[#FFD700] py-3"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <opt.Icon size={15} />
+                      <div>
+                        <div className="font-medium">{opt.label}</div>
+                        <div className="text-[10px] text-white/40">{opt.sub}</div>
+                      </div>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {isMember && (
+              <div
+                className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#FFD700]/10 border border-[#FFD700]/30 text-[#FFD700] text-xs font-semibold"
+                data-testid="member-badge"
+              >
+                <CheckCircle2 size={12} />
+                Diskon Kosan Kerjasama 10% aktif
+              </div>
+            )}
+            {minKg > 0 && (
+              <div className="mt-2 text-white/40 text-[11px]" data-testid="min-kg-hint">
+                Min. kiloan untuk {selectedSource.label}: {minKg.toFixed(1)} kg
+              </div>
+            )}
+          </div>
+        </section>
+
         {/* Tabs */}
-        <section className="animate-fade-up" style={{ animationDelay: "80ms" }}>
+        <section className="animate-fade-up" style={{ animationDelay: "120ms" }}>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList
               className="w-full h-auto p-1.5 glass rounded-2xl grid grid-cols-4 gap-1"
@@ -310,36 +658,46 @@ export default function POSScreen() {
                   {formatIDR(KILOAN_PRICE)}/kg
                 </span>
               </div>
-              <p className="text-white/50 text-xs mb-6">
-                Atur berat cucian dalam kilogram
+              <p className="text-white/50 text-xs mb-5">
+                Atur berat cucian · min {minKg.toFixed(1)} kg
               </p>
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center justify-between gap-3">
                 <CounterBtn
-                  onClick={() => setKiloanKg((v) => Math.max(0, v - 0.5))}
+                  onClick={() => updateKiloanKg(kiloanKg - 0.5)}
                   testid="kiloan-decrease"
+                  disabled={kiloanKg <= minKg}
                 >
                   <Minus size={22} />
                 </CounterBtn>
                 <div className="flex-1 text-center">
+                  <div className="relative flex items-baseline justify-center gap-1">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={kiloanInput}
+                      onChange={handleKiloanInputChange}
+                      onBlur={handleKiloanInputBlur}
+                      data-testid="kiloan-manual-input"
+                      className="w-28 bg-transparent text-center font-heading font-black text-[#FFD700] text-5xl leading-none tracking-tight focus:outline-none border-b-2 border-transparent focus:border-[#FFD700]/40 transition-colors"
+                    />
+                    <span className="font-heading font-bold text-white/40 text-lg">kg</span>
+                  </div>
                   <div
-                    className="font-heading font-black text-[#FFD700] text-5xl leading-none tracking-tight"
+                    className="text-white/50 text-[10px] uppercase tracking-widest mt-1.5"
                     data-testid="kiloan-kg-display"
                   >
-                    {kiloanKg.toFixed(1)}
-                  </div>
-                  <div className="text-white/50 text-xs uppercase tracking-widest mt-1">
                     Kilogram
                   </div>
                 </div>
                 <CounterBtn
-                  onClick={() => setKiloanKg((v) => v + 0.5)}
+                  onClick={() => updateKiloanKg(kiloanKg + 0.5)}
                   testid="kiloan-increase"
                   variant="primary"
                 >
                   <Plus size={22} />
                 </CounterBtn>
               </div>
-              <div className="mt-5 pt-5 border-t border-white/5 flex justify-between items-center">
+              <div className="mt-5 pt-4 border-t border-white/5 flex justify-between items-center">
                 <span className="text-white/60 text-sm">Subtotal kiloan</span>
                 <span
                   className="font-heading font-bold text-white text-lg"
@@ -348,9 +706,75 @@ export default function POSScreen() {
                   {formatIDR(kiloanKg * KILOAN_PRICE)}
                 </span>
               </div>
+
+              {/* Optional detail */}
+              <div className="mt-4 pt-4 border-t border-white/5">
+                <button
+                  onClick={() => setShowKiloanDetail((v) => !v)}
+                  data-testid="toggle-kiloan-detail"
+                  className="w-full flex items-center justify-between px-3 h-11 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-[#FFD700]/30 text-sm transition-all"
+                >
+                  <span className="flex items-center gap-2 text-white/80 font-medium">
+                    <Package size={14} className="text-[#FFD700]" />
+                    Hitung Detail Item (Opsional)
+                  </span>
+                  {showKiloanDetail ? (
+                    <ChevronUp size={16} className="text-white/50" />
+                  ) : (
+                    <ChevronDown size={16} className="text-white/50" />
+                  )}
+                </button>
+                {showKiloanDetail && (
+                  <div
+                    className="mt-3 p-3 rounded-xl bg-black/30 border border-white/5 space-y-2 animate-fade-up"
+                    data-testid="kiloan-detail-list"
+                  >
+                    <p className="text-white/40 text-[10px] uppercase tracking-wider font-medium px-1">
+                      Catat isi bag · tidak mempengaruhi harga
+                    </p>
+                    {KILOAN_DETAIL_ITEMS.map((item) => {
+                      const c = kiloanDetail[item.id] || 0;
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between px-2 py-1.5"
+                          data-testid={`kiloan-detail-${item.id}`}
+                        >
+                          <span className="text-white/80 text-sm">{item.name}</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => bumpCount(setKiloanDetail)(item.id, -1)}
+                              data-testid={`kiloan-detail-dec-${item.id}`}
+                              className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 active:scale-90 transition-all"
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <span
+                              className="min-w-[1.5rem] text-center font-heading font-bold text-[#FFD700] text-sm"
+                              data-testid={`kiloan-detail-count-${item.id}`}
+                            >
+                              {c}
+                            </span>
+                            <button
+                              onClick={() => bumpCount(setKiloanDetail)(item.id, 1)}
+                              data-testid={`kiloan-detail-inc-${item.id}`}
+                              className={`w-8 h-8 rounded-lg border flex items-center justify-center active:scale-90 transition-all ${
+                                c > 0
+                                  ? "bg-[#FFD700] text-black border-[#FFD700]"
+                                  : "bg-white/5 border-white/10 hover:bg-white/10"
+                              }`}
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
-            {/* Satuan */}
             <TabsContent value="satuan" className="mt-4 space-y-2.5">
               {SATUAN_ITEMS.map((item, i) => (
                 <ItemRow
@@ -363,8 +787,6 @@ export default function POSScreen() {
                 />
               ))}
             </TabsContent>
-
-            {/* Sepatu & Karpet */}
             <TabsContent value="sepatu" className="mt-4 space-y-2.5">
               {SEPATU_ITEMS.map((item, i) => (
                 <ItemRow
@@ -377,8 +799,6 @@ export default function POSScreen() {
                 />
               ))}
             </TabsContent>
-
-            {/* Showcase */}
             <TabsContent value="showcase" className="mt-4 space-y-2.5">
               {SHOWCASE_ITEMS.map((item, i) => (
                 <ItemRow
@@ -394,35 +814,146 @@ export default function POSScreen() {
           </Tabs>
         </section>
 
-        {/* Evidence / photo button */}
-        <section className="animate-fade-up" style={{ animationDelay: "160ms" }}>
+        {/* Evidence photos (multi) */}
+        <section className="animate-fade-up" style={{ animationDelay: "200ms" }}>
           <button
             onClick={handleTakePhoto}
             data-testid="photo-upload-button"
-            className={`w-full p-6 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-3 transition-all duration-300 active:scale-[0.98] ${
-              photoTaken
+            className={`w-full p-5 rounded-2xl border-2 border-dashed flex items-center justify-center gap-3 transition-all duration-300 active:scale-[0.98] ${
+              evidencePhotos.length > 0
                 ? "border-[#FFD700] bg-[#FFD700]/15 text-[#FFD700]"
                 : "border-[#FFD700]/50 bg-[#FFD700]/5 text-[#FFD700] hover:bg-[#FFD700]/15 hover:border-[#FFD700] pulse-yellow"
             }`}
           >
-            <div className="w-14 h-14 rounded-full bg-[#FFD700]/20 flex items-center justify-center">
-              {photoTaken ? (
-                <CheckCircle2 size={28} strokeWidth={2.25} />
-              ) : (
-                <Camera size={28} strokeWidth={2.25} />
-              )}
+            <div className="w-12 h-12 rounded-full bg-[#FFD700]/20 flex items-center justify-center">
+              <Camera size={22} strokeWidth={2.25} />
             </div>
-            <div className="text-center">
-              <div className="font-heading font-extrabold text-lg tracking-tight">
-                {photoTaken ? "FOTO TERSIMPAN" : "AMBIL FOTO CUCIAAN"}
+            <div className="text-left">
+              <div className="font-heading font-extrabold text-base tracking-tight">
+                {evidencePhotos.length > 0
+                  ? `+ TAMBAH FOTO CUCIAAN`
+                  : `AMBIL FOTO CUCIAAN`}
               </div>
-              <div className="text-[11px] text-[#FFD700]/70 mt-1 uppercase tracking-widest font-medium">
-                {photoTaken
-                  ? "Tap untuk ambil ulang"
-                  : "Wajib sebagai bukti terima"}
+              <div className="text-[10px] text-[#FFD700]/70 mt-0.5 uppercase tracking-widest font-medium">
+                {evidencePhotos.length > 0
+                  ? `${evidencePhotos.length} foto tersimpan`
+                  : "Bisa lebih dari 1 foto"}
               </div>
             </div>
           </button>
+
+          {evidencePhotos.length > 0 && (
+            <div
+              className="mt-3 grid grid-cols-4 gap-2"
+              data-testid="evidence-thumbnails"
+            >
+              {evidencePhotos.map((p, idx) => (
+                <div
+                  key={p.id}
+                  className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group"
+                  data-testid={`evidence-thumb-${idx}`}
+                  style={{
+                    background: `linear-gradient(135deg, ${p.thumbnail}, rgba(0,0,0,0.3))`,
+                  }}
+                >
+                  <div className="absolute inset-0 flex items-center justify-center text-white/70">
+                    <Camera size={18} />
+                  </div>
+                  <div className="absolute bottom-1 left-1 text-[9px] font-mono text-white/80 font-bold bg-black/40 px-1 rounded">
+                    #{idx + 1}
+                  </div>
+                  <button
+                    onClick={() => removeEvidencePhoto(p.id)}
+                    data-testid={`evidence-remove-${idx}`}
+                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/70 flex items-center justify-center text-white/80 hover:bg-[#FF6B6B] hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label="Hapus foto"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Payment status */}
+        <section className="animate-fade-up" style={{ animationDelay: "260ms" }}>
+          <div className="text-white/50 text-xs uppercase tracking-widest mb-2 block font-medium">
+            Status Pembayaran
+          </div>
+          <div
+            className="glass rounded-2xl p-1.5 grid grid-cols-2 gap-1"
+            data-testid="payment-toggle"
+          >
+            <button
+              onClick={() => setPaymentStatus("lunas")}
+              data-testid="payment-lunas"
+              className={`h-11 rounded-xl flex items-center justify-center gap-2 font-heading font-bold text-sm tracking-wide transition-all ${
+                paymentStatus === "lunas"
+                  ? "bg-[#7DF08F] text-black shadow-[0_0_15px_rgba(125,240,143,0.3)]"
+                  : "text-white/60 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Wallet size={15} strokeWidth={2.5} />
+              LUNAS
+            </button>
+            <button
+              onClick={() => {
+                setPaymentStatus("nanti");
+                setPaymentProof(null);
+              }}
+              data-testid="payment-nanti"
+              className={`h-11 rounded-xl flex items-center justify-center gap-2 font-heading font-bold text-sm tracking-wide transition-all ${
+                paymentStatus === "nanti"
+                  ? "bg-[#FF8A3D] text-black shadow-[0_0_15px_rgba(255,138,61,0.3)]"
+                  : "text-white/60 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Clock size={15} strokeWidth={2.5} />
+              BAYAR NANTI
+            </button>
+          </div>
+
+          {paymentStatus === "lunas" && (
+            <div className="mt-3 animate-fade-up">
+              {!paymentProof ? (
+                <button
+                  onClick={handlePaymentPhoto}
+                  data-testid="payment-proof-button"
+                  className="w-full h-12 rounded-xl border-2 border-dashed border-[#7DF08F]/50 bg-[#7DF08F]/5 hover:bg-[#7DF08F]/15 hover:border-[#7DF08F] text-[#7DF08F] font-heading font-bold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+                >
+                  <Receipt size={16} strokeWidth={2.5} />
+                  UPLOAD BUKTI BAYAR
+                  <span className="text-[#7DF08F]/60 text-[10px]">* wajib</span>
+                </button>
+              ) : (
+                <div
+                  className="p-3 rounded-xl bg-[#7DF08F]/10 border border-[#7DF08F]/30 flex items-center gap-3"
+                  data-testid="payment-proof-thumbnail"
+                >
+                  <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-[#7DF08F]/30 to-[#FFD700]/20 border border-[#7DF08F]/40 flex items-center justify-center flex-shrink-0">
+                    <Receipt size={24} className="text-[#7DF08F]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-heading font-bold text-[#7DF08F] text-sm">
+                      Bukti bayar tersimpan
+                    </div>
+                    <div className="text-white/50 text-[11px] font-mono truncate">
+                      {paymentProof.method} · {formatIDR(paymentProof.amount)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setPaymentProof(null)}
+                    data-testid="payment-proof-remove"
+                    className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-[#FF6B6B] hover:border-[#FF6B6B]/30 transition-colors flex-shrink-0"
+                    aria-label="Hapus bukti bayar"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       </main>
 
@@ -460,16 +991,24 @@ export default function POSScreen() {
         <button
           onClick={handleSave}
           data-testid="save-print-button"
-          disabled={total <= 0}
+          disabled={!!saveBlockedReason}
           className="w-full h-14 rounded-2xl bg-[#FFD700] text-black font-heading font-extrabold text-base tracking-wide flex items-center justify-center gap-2.5 transition-all active:scale-[0.97] hover:bg-[#ffdf33] disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_8px_30px_rgba(255,215,0,0.3)]"
         >
           <QrCode size={20} strokeWidth={2.5} />
           SIMPAN & CETAK QR CODE
         </button>
+        {saveBlockedReason && (
+          <div
+            className="text-center text-[11px] text-[#FF8A3D] mt-2 font-medium"
+            data-testid="save-blocked-hint"
+          >
+            {saveBlockedReason}
+          </div>
+        )}
       </div>
 
-      {/* Photo capture modal (mock R2 upload) */}
-      <Dialog open={photoModalOpen} onOpenChange={setPhotoModalOpen}>
+      {/* Evidence photo modal */}
+      <Dialog open={photoModalOpen} onOpenChange={handleClosePhotoModal}>
         <DialogContent className="bg-[#111111] border-white/10 text-white max-w-sm rounded-3xl">
           <DialogHeader>
             <DialogTitle className="font-heading font-bold text-[#FFD700]">
@@ -480,7 +1019,7 @@ export default function POSScreen() {
             </DialogDescription>
           </DialogHeader>
           <div className="aspect-square rounded-2xl bg-gradient-to-br from-white/5 to-white/0 border border-white/10 flex items-center justify-center overflow-hidden relative">
-            {!photoTaken ? (
+            {photoUploading ? (
               <div className="flex flex-col items-center gap-3 text-white/60">
                 <div className="w-16 h-16 rounded-full border-4 border-[#FFD700]/40 border-t-[#FFD700] animate-spin" />
                 <div className="text-xs uppercase tracking-widest">
@@ -492,7 +1031,7 @@ export default function POSScreen() {
                 <CheckCircle2 size={56} strokeWidth={2} />
                 <div className="font-heading font-bold">Tersimpan</div>
                 <div className="text-[11px] text-white/50 font-mono">
-                  evidence_{Date.now()}.jpg
+                  {evidencePhotos.length} foto total
                 </div>
               </div>
             )}
@@ -507,7 +1046,88 @@ export default function POSScreen() {
         </DialogContent>
       </Dialog>
 
-      {/* QR Code modal */}
+      {/* Payment proof modal */}
+      <Dialog open={paymentModalOpen} onOpenChange={handleClosePaymentModal}>
+        <DialogContent className="bg-[#111111] border-white/10 text-white max-w-sm rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="font-heading font-bold text-[#7DF08F]">
+              Foto Bukti Bayar
+            </DialogTitle>
+            <DialogDescription className="text-white/50 text-xs">
+              Ambil foto struk / uang diterima sebagai bukti pembayaran.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="aspect-square rounded-2xl bg-gradient-to-br from-[#7DF08F]/10 to-white/0 border border-white/10 flex items-center justify-center overflow-hidden relative">
+            {paymentUploading ? (
+              <div className="flex flex-col items-center gap-3 text-white/60">
+                <div className="w-16 h-16 rounded-full border-4 border-[#7DF08F]/40 border-t-[#7DF08F] animate-spin" />
+                <div className="text-xs uppercase tracking-widest">
+                  Memverifikasi pembayaran...
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3 text-[#7DF08F]">
+                <Receipt size={56} strokeWidth={2} />
+                <div className="font-heading font-bold">Bukti tersimpan</div>
+                <div className="text-[11px] text-white/50 font-mono">
+                  {formatIDR(total)}
+                </div>
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => setPaymentModalOpen(false)}
+            className="w-full h-12 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors flex items-center justify-center gap-2"
+            data-testid="close-payment-modal"
+          >
+            <X size={16} /> Tutup
+          </button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tracking modal */}
+      <Dialog open={!!trackOrder} onOpenChange={(o) => !o && setTrackOrder(null)}>
+        <DialogContent
+          className="bg-[#111111] border-white/10 text-white max-w-md rounded-3xl"
+          data-testid="tracking-modal"
+        >
+          <DialogHeader>
+            <DialogTitle className="font-heading font-bold text-[#FFD700] flex items-center gap-2">
+              <Package size={18} />
+              {trackOrder?.id}
+            </DialogTitle>
+            <DialogDescription className="text-white/60 text-xs flex items-center gap-2">
+              <span>{trackOrder?.customer}</span>
+              <span className="text-white/30">·</span>
+              <span>{trackOrder?.kg} kg</span>
+              <span className="text-white/30">·</span>
+              <span className="flex items-center gap-1">
+                <Calendar size={10} />
+                {trackOrder?.date}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          {trackOrder && <TrackingProgress stage={trackOrder.stage} />}
+          <div className="p-3 rounded-xl bg-[#FFD700]/5 border border-[#FFD700]/20 text-xs text-white/70 leading-relaxed">
+            Status saat ini:{" "}
+            <span className="font-heading font-bold text-[#FFD700]">
+              {trackOrder && STAGES[trackOrder.stage]}
+            </span>
+            . Estimasi selesai dalam{" "}
+            {trackOrder && Math.max(1, STAGES.length - 1 - trackOrder.stage)}{" "}
+            tahap lagi.
+          </div>
+          <button
+            onClick={() => setTrackOrder(null)}
+            className="w-full h-11 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors"
+            data-testid="tracking-close"
+          >
+            Tutup
+          </button>
+        </DialogContent>
+      </Dialog>
+
+      {/* QR modal */}
       <Dialog open={qrOpen} onOpenChange={setQrOpen}>
         <DialogContent className="bg-[#111111] border-white/10 text-white max-w-sm rounded-3xl">
           <DialogHeader>
@@ -537,8 +1157,20 @@ export default function POSScreen() {
                 {orderId}
               </div>
               <div className="text-white/50 text-xs">
-                {isMember ? "Member Kostunpad" : "Walk-in"} · {totalItemsCount}{" "}
-                item
+                {customerName} ·{" "}
+                {SOURCE_OPTIONS.find((s) => s.id === sumberOrder)?.label} ·{" "}
+                {totalItemsCount} item
+              </div>
+              <div className="flex items-center justify-center gap-2 mt-1">
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold uppercase tracking-widest border ${
+                    paymentStatus === "lunas"
+                      ? "bg-[#7DF08F]/15 text-[#B4F5BF] border-[#7DF08F]/30"
+                      : "bg-[#FF8A3D]/15 text-[#FFB98C] border-[#FF8A3D]/30"
+                  }`}
+                >
+                  {paymentStatus === "lunas" ? "Lunas" : "Bayar Nanti"}
+                </span>
               </div>
               <div className="font-heading font-bold text-white text-2xl pt-1">
                 {formatIDR(total)}
@@ -547,9 +1179,7 @@ export default function POSScreen() {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => {
-                toast.success("Struk dicetak");
-              }}
+              onClick={() => toast.success("Struk dicetak")}
               className="flex-1 h-12 rounded-xl bg-[#FFD700] text-black font-heading font-bold hover:bg-[#ffdf33] transition-colors flex items-center justify-center gap-2 active:scale-95"
               data-testid="print-receipt-button"
             >
@@ -557,12 +1187,7 @@ export default function POSScreen() {
             </button>
             <button
               onClick={() => {
-                setQrOpen(false);
-                setKiloanKg(0);
-                setSatuanCounts({});
-                setSepatuCounts({});
-                setShowcaseCounts({});
-                setPhotoTaken(false);
+                resetAll();
                 toast.success("Transaksi baru siap");
               }}
               className="flex-1 h-12 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors"
