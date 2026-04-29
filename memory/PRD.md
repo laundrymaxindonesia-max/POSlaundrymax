@@ -16,16 +16,17 @@ Mobile-first three-role ops app + Admin Command Center for a laundry business "L
 - **Superadmin** — monitor KPI, atur multi-tier pricing, lihat laporan pegawai, monitor kuota B2B.
 
 ## What's Been Implemented
-### Segment 1 — Cashier POS (/) — iter_1, iter_5 100%
-4-tab order input (Kiloan/Satuan/Sepatu&Karpet/Showcase). **MAJOR UX OVERHAUL (iter_5)** adds 7 real-world features:
+### Segment 1 — Cashier POS (/) — iter_1, iter_5, iter_6, iter_7 100%
+4-tab order input (Kiloan/Satuan/Sepatu&Karpet/Showcase). **MAJOR UX OVERHAUL (iter_5)** + **Membership Integration (iter_6/7)**:
 - Top **search bar** with autocomplete → tracking modal with horizontal stepper (Antrian→Cuci→Kering→Setrika→Packing→OTW).
 - **Nama Pelanggan** text input + **Sumber Order** select (Walk-in/Outlet Tamel/Anter Jemput/Kosan Kerjasama); Kosan = 10% discount.
-- Kiloan **manually typable** number input + ±0.5 kg buttons; min kg enforced per source (Walk-in 2.0 / Anter Jemput 3.0).
-- **Hitung Detail Item** collapsible inside Kiloan — counters for kemeja/celana/kaos/CD/kaos-kaki that don't affect price.
-- **Multi-photo evidence**: thumbnail grid with remove buttons.
-- **Payment toggle** Lunas / Bayar Nanti; if Lunas → mandatory "UPLOAD BUKTI BAYAR" with thumbnail; save blocked until valid.
-- Save validation: name required → items required → payment proof required (if Lunas).
-- QR save modal unchanged (with payment status badge + source label).
+- Kiloan **manually typable** number input + ±0.5 kg buttons; min kg per source (Walk-in 2.0 / Anter Jemput 3.0).
+- **Hitung Detail Item** collapsible inside Kiloan (does not affect price).
+- **Multi-photo evidence** with thumbnail grid + remove buttons.
+- **Payment toggle** Lunas / Bayar Nanti; Lunas → mandatory UPLOAD BUKTI BAYAR.
+- **Membership system**: 3 seeded members (Budi/Siti/Andi); typing recognized name → Active Member badge (tier · sisa kuota · expiry); auto-deduct in Kiloan tab → total Rp 0 + helper "Akan memotong sisa kuota membership"; receipt shows "SISA KUOTA ANDA: X KG (Hangus pada [date])" snapshot post-deduction.
+- **Member Registration Modal** via "DAFTAR MEMBER BARU" button: Nama / WA / Sumber (Tamel: 15/21/30 kg; Umum: 20/25/35 kg) × 3 tiers (Silver Rp120k / Gold Rp150k / Platinum Rp200k with Free Cuci Sepatu+Bedcover benefits).
+- Save validation: name → items → payment proof (only if total>0 + Lunas + non-member).
 
 ### Segment 2 — Production Scanner (/production) — iter_2 100%
 2×2 chunky station grid (WASH/DRY/IRON/PACK), animated scanner modal (1.5s mock), Recent Scans list with colored badges.
