@@ -1,0 +1,34 @@
+{
+  "summary": "Frontend-only e2e tests for cashier POS membership integration (4 updates: register modal, active member badge, auto-deduct kiloan, receipt membership line). 11/12 scenarios pass; 1 critical UI bug in QR receipt remaining-quota display (double-deduction).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "POSScreen QR receipt (receipt-membership-line)",
+        "issue": "QR receipt shows wrong remaining quota — value is double-subtracted. After saving Budi Santoso (12.5 kg) with 2.0 kg kiloan, receipt displays 'SISA KUOTA ANDA: 8.5 KG' instead of expected 10.5 KG. Persisted member state IS correct (next lookup of Budi shows 10.5 kg), so only the receipt display is wrong.",
+        "selector": "[data-testid=\"receipt-membership-line\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix double-subtraction in memberRemainingAfter shown in QR receipt. Root cause: `memberRemainingAfter = activeMember.remainingKg - kiloanKg` is recomputed via useMemo. handleSave() calls setMembers() to deduct kiloanKg from member.remainingKg, so activeMember.remainingKg becomes 10.5 (post-deduction), then memberRemainingAfter subtracts kiloanKg again → 8.5. Suggested fix: snapshot the post-deduction quota into a dedicated state at save time (e.g. setReceiptRemainingKg(activeMember.remainingKg - kiloanKg) BEFORE setMembers update) and render that value in receipt-membership-line. Alternatively, compute memberRemainingAfter without subtracting when QR is open (i.e. just use activeMember.remainingKg post-save)."
+  ],
+  "critical_code_review_comments": [
+    "POSScreen.jsx is now ~1686 lines — way over 700 line guideline. Extract MEMBER_PACKAGES, INITIAL_MEMBERS, TIER_STYLE constants and the Registration Modal into separate files (e.g. components/pos/RegisterMemberModal.jsx, data/membership.js).",
+    "Receipt remaining-quota computation is order-sensitive vs setMembers() — fragile. Snapshot at save time to decouple display from state mutation timing.",
+    "Member match is case-insensitive on full name only — does not handle whitespace variants or aliases; acceptable for MVP but worth noting.",
+    "Members registry is purely client-side (mocked) — refreshing the page wipes new registrations and quota deductions. Already flagged as MOCKED in problem statement."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped (frontend-only)", "frontend": "92% (11/12 scenarios)"},
+  "test_credentials": "n/a — no auth in app",
+  "seed_data_creation": "n/a — INITIAL_MEMBERS is hardcoded in POSScreen.jsx with Budi/Siti/Andi",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All registration/badge/auto-deduct/save flows verified through Playwright. Pending re-test: receipt-membership-line should display 10.5 KG (not 8.5) after saving Budi Santoso with default 2.0 kg kiloan. Tests 1–9, 11, 12 all pass. Test 10 fails only on the receipt remaining-kg display.",
+  "rca of the issue": "In POSScreen.jsx (~line 546-548), `memberRemainingAfter` is a derived value:\n  const memberRemainingAfter = activeMember\n    ? Math.max(0, activeMember.remainingKg - (usingMembership ? kiloanKg : 0))\n    : 0;\nhandleSave() (~line 528-540) calls setMembers() to deduct kiloanKg from the member, then opens the QR modal. After re-render, activeMember (via useMemo over members) now reflects the deducted value (12.5−2.0=10.5). memberRemainingAfter then computes 10.5 − 2.0 = 8.5, which is rendered inside [data-testid=receipt-membership-line]. Reproduction: type 'Budi Santoso' (12.5 kg member) → kiloan 2.0 kg → click save-print-button → QR opens showing '8.5 KG' instead of '10.5 KG'. Mitigation: capture pre-save snapshot, e.g. add `const [receiptRemainingKg, setReceiptRemainingKg] = useState(0);` and inside handleSave before setMembers call set `setReceiptRemainingKg(Math.max(0, activeMember.remainingKg - kiloanKg));`, then render receiptRemainingKg in the receipt instead of memberRemainingAfter."
+}

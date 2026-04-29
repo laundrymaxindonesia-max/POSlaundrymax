@@ -25,6 +25,11 @@ import {
   Bike,
   Store,
   Building2,
+  Star,
+  Sparkles,
+  Crown,
+  Phone,
+  Gift,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -92,6 +97,128 @@ const MOCK_ORDERS = [
 ];
 
 const STAGES = ["Antrian", "Cuci", "Kering", "Setrika", "Packing", "OTW/Diambil"];
+
+// Membership packages — pricing depends on registration source
+const MEMBER_PACKAGES = {
+  tamel: [
+    {
+      tier: "Silver",
+      kg: 15,
+      price: 120000,
+      Icon: Star,
+      accent: "#A0A0A0",
+      benefits: ["Cuci kiloan 15 kg", "Setrika gratis", "Pickup outlet"],
+    },
+    {
+      tier: "Gold",
+      kg: 21,
+      price: 150000,
+      Icon: Sparkles,
+      accent: "#FFD700",
+      benefits: ["Cuci kiloan 21 kg", "Setrika gratis", "Free 1× cuci jas"],
+    },
+    {
+      tier: "Platinum",
+      kg: 30,
+      price: 200000,
+      Icon: Crown,
+      accent: "#E0BBFF",
+      benefits: [
+        "Cuci kiloan 30 kg",
+        "Free Cuci Sepatu",
+        "Free Cuci Bedcover",
+        "Priority pickup",
+      ],
+    },
+  ],
+  umum: [
+    {
+      tier: "Silver",
+      kg: 20,
+      price: 120000,
+      Icon: Star,
+      accent: "#A0A0A0",
+      benefits: ["Cuci kiloan 20 kg", "Setrika gratis", "Antar gratis ≥5 kg"],
+    },
+    {
+      tier: "Gold",
+      kg: 25,
+      price: 150000,
+      Icon: Sparkles,
+      accent: "#FFD700",
+      benefits: ["Cuci kiloan 25 kg", "Setrika gratis", "Free 1× cuci jas"],
+    },
+    {
+      tier: "Platinum",
+      kg: 35,
+      price: 200000,
+      Icon: Crown,
+      accent: "#E0BBFF",
+      benefits: [
+        "Cuci kiloan 35 kg",
+        "Free Cuci Sepatu",
+        "Free Cuci Bedcover",
+        "Priority antar-jemput",
+      ],
+    },
+  ],
+};
+
+const MEMBER_SOURCE_OPTIONS = [
+  { id: "tamel", label: "Outlet Tamel" },
+  { id: "umum", label: "Umum / Lainnya" },
+];
+
+const INITIAL_MEMBERS = [
+  {
+    name: "Budi Santoso",
+    wa: "0812-3456-7890",
+    tier: "Gold",
+    quotaKg: 25,
+    remainingKg: 12.5,
+    expiry: "18 Mei 2026",
+    source: "umum",
+  },
+  {
+    name: "Siti Rahayu",
+    wa: "0813-2345-6789",
+    tier: "Silver",
+    quotaKg: 20,
+    remainingKg: 8.0,
+    expiry: "22 April 2026",
+    source: "umum",
+  },
+  {
+    name: "Andi Wijaya",
+    wa: "0821-4567-8901",
+    tier: "Platinum",
+    quotaKg: 35,
+    remainingKg: 25.0,
+    expiry: "10 Juni 2026",
+    source: "umum",
+  },
+];
+
+const TIER_STYLE = {
+  Silver: {
+    bg: "bg-white/5",
+    border: "border-white/20",
+    text: "text-white/80",
+    badge: "bg-white/10 text-white border-white/20",
+  },
+  Gold: {
+    bg: "bg-[#FFD700]/10",
+    border: "border-[#FFD700]/40",
+    text: "text-[#FFD700]",
+    badge: "bg-[#FFD700]/15 text-[#FFD700] border-[#FFD700]/40",
+  },
+  Platinum: {
+    bg: "bg-[#E0BBFF]/10",
+    border: "border-[#E0BBFF]/40",
+    text: "text-[#E0BBFF]",
+    badge: "bg-[#E0BBFF]/15 text-[#E0BBFF] border-[#E0BBFF]/40",
+  },
+};
 
 const formatIDR = (n) =>
   "Rp " + Math.round(n).toLocaleString("id-ID").replace(/,/g, ".");
@@ -234,6 +361,23 @@ export default function POSScreen() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [trackOrder, setTrackOrder] = useState(null);
 
+  // Membership
+  const [members, setMembers] = useState(INITIAL_MEMBERS);
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [regName, setRegName] = useState("");
+  const [regWa, setRegWa] = useState("");
+  const [regSource, setRegSource] = useState("tamel");
+  const [regSelectedTier, setRegSelectedTier] = useState("Gold");
+
+  const activeMember = useMemo(() => {
+    const q = customerName.trim().toLowerCase();
+    if (!q) return null;
+    return (
+      members.find((m) => m.name.toLowerCase() === q && m.remainingKg > 0) ||
+      null
+    );
+  }, [customerName, members]);
+
   const selectedSource = SOURCE_OPTIONS.find((s) => s.id === sumberOrder);
   const minKg = selectedSource?.minKg ?? 0;
   const isMember = sumberOrder === "kosan";
@@ -298,8 +442,12 @@ export default function POSScreen() {
     return sum;
   }, [kiloanKg, satuanCounts, sepatuCounts, showcaseCounts]);
 
-  const discount = subtotal * discountRate;
-  const total = subtotal - discount;
+  const kiloanCost = kiloanKg * KILOAN_PRICE;
+  const usingMembership = !!activeMember && kiloanKg > 0;
+  // Auto-deduct: if active member, kiloan cost is covered by quota
+  const membershipDeduction = usingMembership ? kiloanCost : 0;
+  const discount = (subtotal - membershipDeduction) * discountRate;
+  const total = Math.max(0, subtotal - membershipDeduction - discount);
 
   const totalItemsCount =
     (kiloanKg > 0 ? 1 : 0) +
@@ -356,11 +504,11 @@ export default function POSScreen() {
   // Save validation
   const saveBlockedReason = useMemo(() => {
     if (!customerName.trim()) return "Isi nama pelanggan terlebih dahulu";
-    if (total <= 0) return "Tambahkan item terlebih dahulu";
-    if (paymentStatus === "lunas" && !paymentProof)
+    if (totalItemsCount <= 0) return "Tambahkan item terlebih dahulu";
+    if (total > 0 && paymentStatus === "lunas" && !paymentProof)
       return "Upload bukti pembayaran dulu";
     return null;
-  }, [customerName, total, paymentStatus, paymentProof]);
+  }, [customerName, totalItemsCount, total, paymentStatus, paymentProof]);
 
   const handleSave = () => {
     if (saveBlockedReason) {
@@ -376,8 +524,28 @@ export default function POSScreen() {
       "-" +
       Math.floor(Math.random() * 900 + 100);
     setOrderId(id);
+
+    // Deduct from member quota if used
+    if (usingMembership && activeMember) {
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.name === activeMember.name
+            ? {
+                ...m,
+                remainingKg: Math.max(0, m.remainingKg - kiloanKg),
+              }
+            : m
+        )
+      );
+    }
+
     setQrOpen(true);
   };
+
+  // Snapshot of remaining kg AFTER deduction (for QR receipt display)
+  const memberRemainingAfter = activeMember
+    ? Math.max(0, activeMember.remainingKg - (usingMembership ? kiloanKg : 0))
+    : 0;
 
   const resetAll = () => {
     setCustomerName("");
@@ -542,6 +710,64 @@ export default function POSScreen() {
                 className="w-full h-14 pl-11 pr-4 rounded-2xl glass text-white placeholder-white/40 text-base font-medium focus:border-[#FFD700]/50 focus:outline-none transition-colors"
               />
             </div>
+
+            {/* Membership Active Badge */}
+            {activeMember && (
+              <div
+                className={`mt-2 rounded-2xl border p-3 animate-fade-up ${TIER_STYLE[activeMember.tier].bg} ${TIER_STYLE[activeMember.tier].border}`}
+                data-testid="member-active-badge"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`w-9 h-9 rounded-xl border flex items-center justify-center flex-shrink-0 ${TIER_STYLE[activeMember.tier].badge}`}
+                  >
+                    {activeMember.tier === "Platinum" ? (
+                      <Crown size={16} strokeWidth={2.25} />
+                    ) : activeMember.tier === "Gold" ? (
+                      <Sparkles size={16} strokeWidth={2.25} />
+                    ) : (
+                      <Star size={16} strokeWidth={2.25} />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-heading font-bold text-white/50">
+                      Member Aktif
+                      <span
+                        className={`px-1.5 py-0 rounded-md ${TIER_STYLE[activeMember.tier].badge} border`}
+                      >
+                        {activeMember.tier}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline gap-2 mt-0.5 text-sm">
+                      <span className="text-white/60">Sisa Kuota:</span>
+                      <span
+                        className={`font-heading font-bold ${TIER_STYLE[activeMember.tier].text}`}
+                        data-testid="member-quota-remaining"
+                      >
+                        {activeMember.remainingKg.toFixed(1)} kg
+                      </span>
+                    </div>
+                    <div className="text-white/40 text-[10px] mt-0.5 flex items-center gap-1">
+                      <Calendar size={10} />
+                      Berlaku s/d {activeMember.expiry}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Daftar Member button */}
+            <button
+              onClick={() => {
+                setRegName(customerName || "");
+                setRegisterOpen(true);
+              }}
+              data-testid="register-member-button"
+              className="mt-2 w-full h-11 rounded-xl border border-[#FFD700]/40 bg-gradient-to-r from-[#FFD700]/15 to-[#FFD700]/5 hover:from-[#FFD700]/25 hover:to-[#FFD700]/10 text-[#FFD700] font-heading font-bold text-sm tracking-wide flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+            >
+              <Sparkles size={15} strokeWidth={2.5} />
+              DAFTAR MEMBER BARU
+            </button>
           </div>
 
           <div>
@@ -687,6 +913,34 @@ export default function POSScreen() {
                   {formatIDR(kiloanKg * KILOAN_PRICE)}
                 </span>
               </div>
+
+              {usingMembership && (
+                <div
+                  className={`mt-3 p-3 rounded-xl border ${TIER_STYLE[activeMember.tier].bg} ${TIER_STYLE[activeMember.tier].border}`}
+                  data-testid="membership-helper"
+                >
+                  <div className="flex items-start gap-2.5">
+                    {activeMember.tier === "Platinum" ? (
+                      <Crown size={14} className={TIER_STYLE[activeMember.tier].text} />
+                    ) : activeMember.tier === "Gold" ? (
+                      <Sparkles size={14} className={TIER_STYLE[activeMember.tier].text} />
+                    ) : (
+                      <Star size={14} className={TIER_STYLE[activeMember.tier].text} />
+                    )}
+                    <div className="flex-1 text-xs leading-relaxed">
+                      <span className="text-white/70">
+                        Akan memotong sisa kuota membership.
+                      </span>{" "}
+                      <span className={`font-heading font-bold ${TIER_STYLE[activeMember.tier].text}`}>
+                        −{kiloanKg.toFixed(1)} kg
+                      </span>
+                      <div className="text-white/40 text-[10px] mt-0.5">
+                        Sisa setelah order: {memberRemainingAfter.toFixed(1)} kg
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Optional detail */}
               <div className="mt-4 pt-4 border-t border-white/5">
@@ -947,7 +1201,15 @@ export default function POSScreen() {
           <div>
             <div className="text-white/50 text-[11px] uppercase tracking-widest font-medium">
               Total Harga
-              {isMember && subtotal > 0 && (
+              {usingMembership && (
+                <span
+                  className="ml-1.5 text-[#FFD700] normal-case tracking-normal"
+                  data-testid="total-membership-note"
+                >
+                  (membership cover)
+                </span>
+              )}
+              {!usingMembership && isMember && subtotal > 0 && (
                 <span className="ml-1.5 text-[#FFD700] normal-case tracking-normal">
                   (−{formatIDR(discount)})
                 </span>
@@ -1145,17 +1407,41 @@ export default function POSScreen() {
               <div className="flex items-center justify-center gap-2 mt-1">
                 <span
                   className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold uppercase tracking-widest border ${
-                    paymentStatus === "lunas"
+                    paymentStatus === "lunas" || usingMembership
                       ? "bg-[#7DF08F]/15 text-[#B4F5BF] border-[#7DF08F]/30"
                       : "bg-[#FF8A3D]/15 text-[#FFB98C] border-[#FF8A3D]/30"
                   }`}
                 >
-                  {paymentStatus === "lunas" ? "Lunas" : "Bayar Nanti"}
+                  {usingMembership
+                    ? "Membership"
+                    : paymentStatus === "lunas"
+                    ? "Lunas"
+                    : "Bayar Nanti"}
                 </span>
               </div>
               <div className="font-heading font-bold text-white text-2xl pt-1">
                 {formatIDR(total)}
               </div>
+
+              {usingMembership && activeMember && (
+                <div
+                  className={`mt-3 mx-2 p-3 rounded-xl border-2 border-dashed ${TIER_STYLE[activeMember.tier].border} ${TIER_STYLE[activeMember.tier].bg}`}
+                  data-testid="receipt-membership-line"
+                >
+                  <div className="text-[10px] uppercase tracking-widest text-white/50 font-medium">
+                    Sisa Kuota Anda
+                  </div>
+                  <div
+                    className={`font-heading font-black text-2xl tracking-tight ${TIER_STYLE[activeMember.tier].text}`}
+                  >
+                    {memberRemainingAfter.toFixed(1)} KG
+                  </div>
+                  <div className="text-white/40 text-[10px] mt-0.5 flex items-center justify-center gap-1">
+                    <Clock size={10} />
+                    Hangus pada {activeMember.expiry}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="flex gap-2">
@@ -1175,6 +1461,221 @@ export default function POSScreen() {
               data-testid="new-order-button"
             >
               Order Baru
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Membership Registration Modal */}
+      <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
+        <DialogContent
+          className="bg-[#111111] border-white/10 text-white max-w-md rounded-3xl max-h-[90vh] overflow-y-auto no-scrollbar"
+          data-testid="register-modal"
+        >
+          <DialogHeader>
+            <DialogTitle className="font-heading font-bold text-[#FFD700] flex items-center gap-2">
+              <Sparkles size={18} />
+              Daftar Member Baru
+            </DialogTitle>
+            <DialogDescription className="text-white/50 text-xs">
+              Pilih paket bulanan sesuai kebutuhan pelanggan.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {/* Name */}
+            <div>
+              <label className="text-white/50 text-[10px] uppercase tracking-widest mb-1.5 block font-medium">
+                Nama
+              </label>
+              <div className="relative">
+                <User
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#FFD700]"
+                />
+                <input
+                  type="text"
+                  value={regName}
+                  onChange={(e) => setRegName(e.target.value)}
+                  placeholder="Nama lengkap"
+                  data-testid="register-name-input"
+                  className="w-full h-11 pl-9 pr-3 rounded-xl bg-[#0a0a0a] border border-white/10 focus:border-[#FFD700]/50 focus:outline-none text-white text-sm transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* WA */}
+            <div>
+              <label className="text-white/50 text-[10px] uppercase tracking-widest mb-1.5 block font-medium">
+                Nomor WA
+              </label>
+              <div className="relative">
+                <Phone
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#FFD700]"
+                />
+                <input
+                  type="tel"
+                  value={regWa}
+                  onChange={(e) => setRegWa(e.target.value)}
+                  placeholder="08xxxxxxxxxx"
+                  data-testid="register-wa-input"
+                  className="w-full h-11 pl-9 pr-3 rounded-xl bg-[#0a0a0a] border border-white/10 focus:border-[#FFD700]/50 focus:outline-none text-white text-sm font-mono transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Source */}
+            <div>
+              <label className="text-white/50 text-[10px] uppercase tracking-widest mb-1.5 block font-medium">
+                Sumber
+              </label>
+              <Select value={regSource} onValueChange={setRegSource}>
+                <SelectTrigger
+                  data-testid="register-source-dropdown"
+                  className="w-full h-11 bg-[#0a0a0a] border-white/10 hover:border-[#FFD700]/50 rounded-xl text-sm focus:ring-[#FFD700] focus:ring-offset-0"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
+                  {MEMBER_SOURCE_OPTIONS.map((opt) => (
+                    <SelectItem
+                      key={opt.id}
+                      value={opt.id}
+                      data-testid={`register-source-${opt.id}`}
+                      className="focus:bg-[#FFD700]/10 focus:text-[#FFD700]"
+                    >
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Package cards */}
+            <div>
+              <label className="text-white/50 text-[10px] uppercase tracking-widest mb-2 block font-medium">
+                Pilih Paket
+              </label>
+              <div
+                className="space-y-2"
+                data-testid="register-packages"
+              >
+                {MEMBER_PACKAGES[regSource].map((pkg) => {
+                  const selected = regSelectedTier === pkg.tier;
+                  return (
+                    <button
+                      key={pkg.tier}
+                      onClick={() => setRegSelectedTier(pkg.tier)}
+                      data-testid={`register-package-${pkg.tier.toLowerCase()}`}
+                      className={`w-full text-left rounded-2xl border-2 p-4 transition-all active:scale-[0.99] ${
+                        selected
+                          ? `${TIER_STYLE[pkg.tier].border} ${TIER_STYLE[pkg.tier].bg} shadow-[0_0_20px_rgba(255,215,0,0.15)]`
+                          : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05]"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <div
+                            className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${TIER_STYLE[pkg.tier].badge}`}
+                          >
+                            <pkg.Icon size={18} strokeWidth={2.25} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`font-heading font-extrabold text-base tracking-tight ${TIER_STYLE[pkg.tier].text}`}
+                              >
+                                {pkg.tier}
+                              </span>
+                              <span className="text-white/40 text-xs">
+                                · {pkg.kg} kg/bulan
+                              </span>
+                            </div>
+                            <div
+                              className={`font-heading font-bold text-lg leading-tight mt-0.5 text-white`}
+                            >
+                              {formatIDR(pkg.price)}
+                            </div>
+                          </div>
+                        </div>
+                        {selected && (
+                          <div
+                            className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${TIER_STYLE[pkg.tier].badge} border`}
+                          >
+                            <CheckCircle2 size={14} strokeWidth={2.5} />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-white/5 space-y-1">
+                        {pkg.benefits.map((b, i) => (
+                          <div
+                            key={i}
+                            className="flex items-start gap-2 text-[11px] text-white/60"
+                          >
+                            <Gift
+                              size={11}
+                              className={`mt-0.5 flex-shrink-0 ${TIER_STYLE[pkg.tier].text}`}
+                            />
+                            <span>{b}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => setRegisterOpen(false)}
+              data-testid="register-cancel-button"
+              className="flex-1 h-12 rounded-xl bg-white/5 border border-white/10 text-white/80 font-medium hover:bg-white/10 transition-colors"
+            >
+              Batal
+            </button>
+            <button
+              onClick={() => {
+                if (!regName.trim()) {
+                  toast.error("Isi nama dulu");
+                  return;
+                }
+                if (!regWa.trim()) {
+                  toast.error("Isi nomor WA dulu");
+                  return;
+                }
+                const pkg = MEMBER_PACKAGES[regSource].find(
+                  (p) => p.tier === regSelectedTier
+                );
+                const expiry = new Date(Date.now() + 30 * 86400 * 1000).toLocaleDateString(
+                  "id-ID",
+                  { day: "numeric", month: "long", year: "numeric" }
+                );
+                const newMember = {
+                  name: regName.trim(),
+                  wa: regWa.trim(),
+                  tier: pkg.tier,
+                  quotaKg: pkg.kg,
+                  remainingKg: pkg.kg,
+                  expiry,
+                  source: regSource,
+                };
+                setMembers((prev) => [...prev, newMember]);
+                setCustomerName(regName.trim());
+                setRegisterOpen(false);
+                setRegWa("");
+                toast.success(`Member ${pkg.tier} terdaftar`, {
+                  description: `${regName.trim()} · ${pkg.kg} kg/bulan`,
+                });
+              }}
+              data-testid="register-confirm-button"
+              className="flex-1 h-12 rounded-xl bg-[#FFD700] text-black font-heading font-extrabold flex items-center justify-center gap-2 hover:bg-[#ffdf33] active:scale-95 transition-all shadow-[0_8px_30px_rgba(255,215,0,0.25)]"
+            >
+              <Sparkles size={16} strokeWidth={2.5} />
+              Daftar
             </button>
           </div>
         </DialogContent>
