@@ -355,6 +355,9 @@ export default function POSScreen() {
   // QR / save
   const [qrOpen, setQrOpen] = useState(false);
   const [orderId, setOrderId] = useState("");
+  const [receiptRemainingKg, setReceiptRemainingKg] = useState(0);
+  const [receiptUsedMembership, setReceiptUsedMembership] = useState(false);
+  const [receiptMemberSnapshot, setReceiptMemberSnapshot] = useState(null);
 
   // Search / tracking
   const [searchQuery, setSearchQuery] = useState("");
@@ -525,24 +528,28 @@ export default function POSScreen() {
       Math.floor(Math.random() * 900 + 100);
     setOrderId(id);
 
-    // Deduct from member quota if used
+    // Snapshot membership state BEFORE state mutation so receipt shows correct post-order remaining
     if (usingMembership && activeMember) {
+      const remainingAfter = Math.max(0, activeMember.remainingKg - kiloanKg);
+      setReceiptRemainingKg(remainingAfter);
+      setReceiptUsedMembership(true);
+      setReceiptMemberSnapshot({ ...activeMember });
       setMembers((prev) =>
         prev.map((m) =>
           m.name === activeMember.name
-            ? {
-                ...m,
-                remainingKg: Math.max(0, m.remainingKg - kiloanKg),
-              }
+            ? { ...m, remainingKg: remainingAfter }
             : m
         )
       );
+    } else {
+      setReceiptUsedMembership(false);
+      setReceiptMemberSnapshot(null);
     }
 
     setQrOpen(true);
   };
 
-  // Snapshot of remaining kg AFTER deduction (for QR receipt display)
+  // Snapshot of remaining kg AFTER deduction (live preview in kiloan helper, before save)
   const memberRemainingAfter = activeMember
     ? Math.max(0, activeMember.remainingKg - (usingMembership ? kiloanKg : 0))
     : 0;
@@ -1407,12 +1414,12 @@ export default function POSScreen() {
               <div className="flex items-center justify-center gap-2 mt-1">
                 <span
                   className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold uppercase tracking-widest border ${
-                    paymentStatus === "lunas" || usingMembership
+                    paymentStatus === "lunas" || receiptUsedMembership
                       ? "bg-[#7DF08F]/15 text-[#B4F5BF] border-[#7DF08F]/30"
                       : "bg-[#FF8A3D]/15 text-[#FFB98C] border-[#FF8A3D]/30"
                   }`}
                 >
-                  {usingMembership
+                  {receiptUsedMembership
                     ? "Membership"
                     : paymentStatus === "lunas"
                     ? "Lunas"
@@ -1423,22 +1430,22 @@ export default function POSScreen() {
                 {formatIDR(total)}
               </div>
 
-              {usingMembership && activeMember && (
+              {receiptUsedMembership && receiptMemberSnapshot && (
                 <div
-                  className={`mt-3 mx-2 p-3 rounded-xl border-2 border-dashed ${TIER_STYLE[activeMember.tier].border} ${TIER_STYLE[activeMember.tier].bg}`}
+                  className={`mt-3 mx-2 p-3 rounded-xl border-2 border-dashed ${TIER_STYLE[receiptMemberSnapshot.tier].border} ${TIER_STYLE[receiptMemberSnapshot.tier].bg}`}
                   data-testid="receipt-membership-line"
                 >
                   <div className="text-[10px] uppercase tracking-widest text-white/50 font-medium">
                     Sisa Kuota Anda
                   </div>
                   <div
-                    className={`font-heading font-black text-2xl tracking-tight ${TIER_STYLE[activeMember.tier].text}`}
+                    className={`font-heading font-black text-2xl tracking-tight ${TIER_STYLE[receiptMemberSnapshot.tier].text}`}
                   >
-                    {memberRemainingAfter.toFixed(1)} KG
+                    {receiptRemainingKg.toFixed(1)} KG
                   </div>
                   <div className="text-white/40 text-[10px] mt-0.5 flex items-center justify-center gap-1">
                     <Clock size={10} />
-                    Hangus pada {activeMember.expiry}
+                    Hangus pada {receiptMemberSnapshot.expiry}
                   </div>
                 </div>
               )}

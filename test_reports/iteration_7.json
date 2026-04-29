@@ -1,0 +1,24 @@
+{
+  "summary": "Re-test of receipt-membership-line bug fix from iteration_6. All 4 scenarios pass. Bug fixed: receipt now snapshots remainingKg into receiptRemainingKg state BEFORE setMembers mutation, so the receipt displays the correct post-deduction value. No regressions on non-member flow.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "POSScreen.jsx is 1693 lines (exceeded 700-line guideline) — recommend splitting MEMBER_PACKAGES, INITIAL_MEMBERS, TIER_STYLE constants and the Registration Modal into separate files. Carry-over from iteration_6.",
+    "Members registry remains client-side only (mocked) — already flagged as MOCKED.",
+    "Fix is correctly implemented: receiptRemainingKg, receiptUsedMembership, receiptMemberSnapshot states are set inside handleSave BEFORE setMembers; QR modal reads from snapshot state — decouples display from mutation timing."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped (frontend-only)", "frontend": "100% (4/4 scenarios)"},
+  "test_credentials": "n/a — no auth in app",
+  "seed_data_creation": "n/a — INITIAL_MEMBERS hardcoded (Budi Santoso 12.5kg Gold, Andi Wijaya 25kg Platinum, Siti)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter_6 bug (receipt double-deduction showing 8.5 instead of 10.5 KG) is fully resolved. Verified via Playwright: (1) Budi Santoso 12.5−2.0 → receipt 10.5 KG + 'Hangus pada 18 Mei 2026'; (2) state persisted: badge after new-order shows 10.5 kg; (3) Andi Wijaya 25.0−5.0 → receipt 20.0 KG + 'Hangus pada 10 Juni 2026'; (4) Non-member Test User → QR modal opens with LUNAS badge, no receipt-membership-line. Screenshots confirm correct rendering. All flows tested via REACT_APP_BACKEND_URL public endpoint.",
+  "rca of the issue": "Iteration_6 RCA: derived useMemo `memberRemainingAfter = activeMember.remainingKg - kiloanKg` was rendered after setMembers had already deducted from the source state, causing double-subtraction. Fix in iter_7: handleSave snapshots `remainingAfter = max(0, activeMember.remainingKg - kiloanKg)` into `receiptRemainingKg` state BEFORE calling setMembers; QR modal renders `receiptRemainingKg.toFixed(1) KG` and uses `receiptMemberSnapshot` (cloned activeMember) for tier styling and expiry. Verified working."
+}
