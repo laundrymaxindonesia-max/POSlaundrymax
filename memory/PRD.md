@@ -31,8 +31,15 @@ Mobile-first three-role ops app + Admin Command Center for a laundry business "L
 ### Segment 2 — Production Scanner (/production) — iter_2 100%
 2×2 chunky station grid (WASH/DRY/IRON/PACK), animated scanner modal (1.5s mock), Recent Scans list with colored badges.
 
-### Segment 3 — Courier Dashboard (/courier) — iter_3 100%
-2 tabs: JEMPUT (scan→manifest, ANGKUT SEMUA CTA) + ANTAREUN (delivery cards with PoD photo modal). Shared HeaderNav added.
+### Segment 3 — Courier Dashboard (/courier) — iter_3, iter_8 100%
+2 tabs: JEMPUT (scan→manifest, ANGKUT SEMUA CTA) + ANTAREUN (2-section flow). Shared HeaderNav.
+
+**ANTAREUN delivery flow overhauled (iter_8)** — simulates realistic trip loading:
+- **Section "Menunggu di Outlet"**: 4 seeded ready orders with mini payment-status badge (Lunas/Nanti) and total price per row.
+- Massive **"SCAN BARANG MASUK MOTOR"** button (reuses scanner modal with `scanMode` state, 1.5s animation, StrictMode-safe via `queueMicrotask` + idempotent guard) moves 1st ready order → onMotor list with toast.
+- **Section "Di Atas Motor · Sedang Diantar"**: full delivery cards with customer, address, phone, ETA, items, payment badge, "Wajib tagih" hint for Bayar-Nanti.
+- **"BARANG DITERIMA (AMBIL BUKTI)"** → PoD modal with 2-step capture: Step 1 delivery photo always required; Step 2 payment proof only for paymentStatus='nanti' (sequential, payment button disabled until delivery captured). Selesai button gated by `podReady = podCaptured && (!podPaymentRequired || podPaymentCaptured)`.
+- On confirm → order removed from onMotor list + success toast.
 
 ### Segment 4 — Admin Command Center (/admin) — iter_4 100%
 Desktop sidebar layout (mobile drawer via burger menu) with mock auth badge "Superadmin: theomahrizal@gmail.com".
