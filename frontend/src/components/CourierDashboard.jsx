@@ -11,6 +11,9 @@ import {
   X,
   User as UserIcon,
   Clock,
+  Wallet,
+  Receipt,
+  PackageCheck,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -29,7 +32,7 @@ const INITIAL_MANIFEST = [
   { id: "LND-013", customer: "Tamel", weight: "1.5 kg", time: "11:08" },
 ];
 
-const INITIAL_DELIVERIES = [
+const INITIAL_READY_ORDERS = [
   {
     id: "LND-005",
     customer: "Kosan Wins",
@@ -37,6 +40,8 @@ const INITIAL_DELIVERIES = [
     phone: "0812-xxxx-4488",
     eta: "15 menit",
     items: "4 pcs · Kiloan",
+    total: "Rp 32.000",
+    paymentStatus: "lunas",
   },
   {
     id: "LND-006",
@@ -45,6 +50,8 @@ const INITIAL_DELIVERIES = [
     phone: "0821-xxxx-1223",
     eta: "22 menit",
     items: "2 pcs · Satuan",
+    total: "Rp 30.000",
+    paymentStatus: "nanti",
   },
   {
     id: "LND-007",
@@ -53,22 +60,51 @@ const INITIAL_DELIVERIES = [
     phone: "0813-xxxx-9012",
     eta: "35 menit",
     items: "6 pcs · Kiloan + Jas",
+    total: "Rp 76.000",
+    paymentStatus: "nanti",
+  },
+  {
+    id: "LND-008",
+    customer: "Bapak Hendra",
+    address: "Jl. Dipatiukur No. 115",
+    phone: "0815-xxxx-7766",
+    eta: "28 menit",
+    items: "3 pcs · Kiloan",
+    total: "Rp 0 · Membership",
+    paymentStatus: "lunas",
+  },
+];
+
+const INITIAL_ON_MOTOR = [
+  {
+    id: "LND-004",
+    customer: "Ratna Dewi",
+    address: "Jl. Sukajadi No. 89A",
+    phone: "0817-xxxx-3344",
+    eta: "8 menit",
+    items: "5 pcs · Kiloan + Sepatu",
+    total: "Rp 60.000",
+    paymentStatus: "lunas",
   },
 ];
 
 export default function CourierDashboard() {
   const [activeTab, setActiveTab] = useState("pickup");
   const [manifest, setManifest] = useState(INITIAL_MANIFEST);
-  const [deliveries, setDeliveries] = useState(INITIAL_DELIVERIES);
+  const [readyOrders, setReadyOrders] = useState(INITIAL_READY_ORDERS);
+  const [onMotorOrders, setOnMotorOrders] = useState(INITIAL_ON_MOTOR);
 
-  // Pickup scanner
+  // Pickup / motor-load scanner (reused)
   const [scanOpen, setScanOpen] = useState(false);
+  const [scanMode, setScanMode] = useState("pickup"); // pickup | motor
   const scanTimerRef = useRef(null);
 
   // Delivery proof-of-delivery
   const [podOpen, setPodOpen] = useState(false);
   const [podOrder, setPodOrder] = useState(null);
   const [podCaptured, setPodCaptured] = useState(false);
+  const [podPaymentCaptured, setPodPaymentCaptured] = useState(false);
+  const [podCapturing, setPodCapturing] = useState(null); // "delivery" | "payment" | null
   const podTimerRef = useRef(null);
 
   useEffect(() => {
@@ -79,6 +115,7 @@ export default function CourierDashboard() {
   }, []);
 
   const handleScanPickup = () => {
+    setScanMode("pickup");
     setScanOpen(true);
     scanTimerRef.current = setTimeout(() => {
       const newId =
@@ -99,6 +136,33 @@ export default function CourierDashboard() {
       ]);
       toast.success(`Bag ${newId} masuk manifest`, {
         description: `Total ${manifest.length + 1} bag siap diangkut`,
+      });
+      setScanOpen(false);
+    }, 1500);
+  };
+
+  const handleScanMotorLoad = () => {
+    if (readyOrders.length === 0) {
+      toast.error("Tidak ada order menunggu di outlet");
+      return;
+    }
+    setScanMode("motor");
+    setScanOpen(true);
+    scanTimerRef.current = setTimeout(() => {
+      setReadyOrders((prev) => {
+        if (prev.length === 0) return prev;
+        const picked = prev[0];
+        // Schedule side-effects after state settles (idempotent outside updater)
+        queueMicrotask(() => {
+          setOnMotorOrders((motor) => {
+            if (motor.some((m) => m.id === picked.id)) return motor;
+            return [picked, ...motor];
+          });
+          toast.success(`Order ${picked.id} masuk ke manifest motor`, {
+            description: "Status: Sedang Diantar",
+          });
+        });
+        return prev.slice(1);
       });
       setScanOpen(false);
     }, 1500);
@@ -126,21 +190,38 @@ export default function CourierDashboard() {
   const openPoD = (order) => {
     setPodOrder(order);
     setPodCaptured(false);
+    setPodPaymentCaptured(false);
+    setPodCapturing(null);
     setPodOpen(true);
+  };
+
+  const capturePhoto = (kind) => {
+    if (podCapturing) return;
+    setPodCapturing(kind);
     podTimerRef.current = setTimeout(() => {
-      setPodCaptured(true);
+      if (kind === "delivery") {
+        setPodCaptured(true);
+      } else {
+        setPodPaymentCaptured(true);
+      }
+      setPodCapturing(null);
     }, 900);
   };
 
+  const podPaymentRequired = podOrder?.paymentStatus === "nanti";
+  const podReady = podCaptured && (!podPaymentRequired || podPaymentCaptured);
+
   const confirmDelivery = () => {
-    if (!podCaptured || !podOrder) return;
-    setDeliveries((prev) => prev.filter((d) => d.id !== podOrder.id));
+    if (!podReady || !podOrder) return;
+    setOnMotorOrders((prev) => prev.filter((d) => d.id !== podOrder.id));
     toast.success("Order Selesai Diantar!", {
       description: `${podOrder.id} · ${podOrder.customer}`,
     });
     setPodOpen(false);
     setPodOrder(null);
     setPodCaptured(false);
+    setPodPaymentCaptured(false);
+    setPodCapturing(null);
   };
 
   const handleClosePod = (open) => {
@@ -151,6 +232,8 @@ export default function CourierDashboard() {
       }
       setPodOrder(null);
       setPodCaptured(false);
+      setPodPaymentCaptured(false);
+      setPodCapturing(null);
     }
     setPodOpen(open);
   };
@@ -297,88 +380,246 @@ export default function CourierDashboard() {
           </TabsContent>
 
           {/* ============= DELIVERY TAB ============= */}
-          <TabsContent value="delivery" className="mt-5 space-y-4">
-            <div className="flex items-center justify-between animate-fade-up">
-              <h2 className="font-heading font-bold text-white text-lg tracking-tight">
-                Siap Antar
-              </h2>
+          <TabsContent value="delivery" className="mt-5 space-y-5">
+            {/* Massive scan-to-motor button */}
+            <button
+              onClick={handleScanMotorLoad}
+              disabled={readyOrders.length === 0}
+              data-testid="scan-motor-button"
+              className={`w-full rounded-3xl border-2 border-dashed transition-all active:scale-[0.98] p-6 flex flex-col items-center gap-3 animate-fade-up ${
+                readyOrders.length === 0
+                  ? "border-white/10 bg-white/[0.02] text-white/30 cursor-not-allowed"
+                  : "border-[#FFD700]/50 bg-[#FFD700]/5 hover:bg-[#FFD700]/15 hover:border-[#FFD700] text-[#FFD700] pulse-yellow"
+              }`}
+            >
               <div
-                className="px-2.5 py-1 rounded-full bg-[#7DF08F]/15 border border-[#7DF08F]/30 text-[#B4F5BF] text-[10px] font-heading font-bold uppercase tracking-widest"
-                data-testid="delivery-count-badge"
+                className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                  readyOrders.length === 0
+                    ? "bg-white/5"
+                    : "bg-[#FFD700]/20 border border-[#FFD700]/40"
+                }`}
               >
-                {deliveries.length} Order
+                <PackageCheck size={30} strokeWidth={2.25} />
               </div>
-            </div>
+              <div className="text-center">
+                <div className="font-heading font-black text-lg tracking-tight">
+                  SCAN BARANG MASUK MOTOR
+                </div>
+                <div
+                  className={`text-[10px] uppercase tracking-widest font-medium mt-1 ${
+                    readyOrders.length === 0 ? "text-white/30" : "text-[#FFD700]/70"
+                  }`}
+                >
+                  {readyOrders.length === 0
+                    ? "Semua order sudah dimuat"
+                    : `${readyOrders.length} order menunggu dimuat`}
+                </div>
+              </div>
+            </button>
 
-            {deliveries.length === 0 ? (
-              <div
-                className="glass rounded-2xl p-10 flex flex-col items-center gap-2 text-white/40 text-sm"
-                data-testid="delivery-empty"
-              >
-                <CheckCircle2 size={36} strokeWidth={1.5} className="text-[#7DF08F]" />
-                <span className="text-white/60 font-heading font-bold">
-                  Semua order sudah diantar
-                </span>
-                <span className="text-[11px]">Mantap! Istirahat dulu.</span>
+            {/* SECTION 1: Menunggu di Outlet */}
+            <section
+              className="animate-fade-up"
+              style={{ animationDelay: "100ms" }}
+              data-testid="section-ready"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-5 rounded-full bg-[#FFD700]" />
+                  <h2 className="font-heading font-bold text-white text-base tracking-tight">
+                    Menunggu di Outlet
+                  </h2>
+                </div>
+                <div
+                  className="px-2.5 py-1 rounded-full bg-[#FFD700]/15 border border-[#FFD700]/30 text-[#FFD700] text-[10px] font-heading font-bold uppercase tracking-widest"
+                  data-testid="ready-count-badge"
+                >
+                  {readyOrders.length} Order
+                </div>
               </div>
-            ) : (
-              <div className="space-y-3" data-testid="delivery-list">
-                {deliveries.map((order, idx) => (
-                  <div
-                    key={order.id}
-                    data-testid={`delivery-card-${order.id}`}
-                    className="glass rounded-2xl p-4 space-y-3 animate-fade-up border-white/10"
-                    style={{ animationDelay: `${idx * 60}ms` }}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-heading font-extrabold text-white text-base tracking-tight">
-                            {order.id}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full bg-[#7DF08F]/15 border border-[#7DF08F]/30 text-[#B4F5BF] text-[9px] font-heading font-bold uppercase tracking-widest">
-                            Siap Antar
-                          </span>
+
+              {readyOrders.length === 0 ? (
+                <div
+                  className="glass rounded-2xl p-6 flex flex-col items-center gap-2 text-white/40 text-xs"
+                  data-testid="ready-empty"
+                >
+                  <Package size={24} strokeWidth={1.5} />
+                  <span>Outlet kosong — scan order yang siap</span>
+                </div>
+              ) : (
+                <div className="space-y-2" data-testid="ready-list">
+                  {readyOrders.map((order, idx) => (
+                    <div
+                      key={order.id}
+                      data-testid={`ready-card-${order.id}`}
+                      className="glass rounded-2xl p-3 flex items-center justify-between gap-3 animate-fade-up"
+                      style={{ animationDelay: `${idx * 40}ms` }}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-[#FFD700]/10 border border-[#FFD700]/25 flex items-center justify-center flex-shrink-0">
+                          <Package
+                            size={16}
+                            className="text-[#FFD700]"
+                            strokeWidth={2.25}
+                          />
                         </div>
-                        <div className="flex items-center gap-1.5 text-white/80 text-sm mt-1.5 font-medium">
-                          <UserIcon size={13} className="text-[#FFD700]" />
-                          {order.customer}
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-heading font-bold text-white text-sm tracking-tight">
+                              {order.id}
+                            </span>
+                            <span
+                              className={`px-1.5 py-0 rounded text-[8px] font-heading font-bold uppercase tracking-wider border ${
+                                order.paymentStatus === "lunas"
+                                  ? "bg-[#7DF08F]/15 text-[#B4F5BF] border-[#7DF08F]/30"
+                                  : "bg-[#FF8A3D]/15 text-[#FFB98C] border-[#FF8A3D]/30"
+                              }`}
+                            >
+                              {order.paymentStatus === "lunas" ? "Lunas" : "Nanti"}
+                            </span>
+                          </div>
+                          <div className="text-white/60 text-xs mt-0.5 truncate font-medium">
+                            {order.customer}
+                          </div>
+                          <div className="text-white/40 text-[10px] truncate">
+                            {order.items}
+                          </div>
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <div className="flex items-center gap-1 text-[#FFD700] text-xs font-heading font-bold">
-                          <Clock size={12} />
+                        <div className="font-mono text-[#FFD700] text-xs font-heading font-bold">
+                          {order.total}
+                        </div>
+                        <div className="text-white/30 text-[9px] uppercase tracking-wider mt-0.5">
                           {order.eta}
                         </div>
-                        <div className="text-white/40 text-[10px] mt-0.5">
-                          {order.items}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* SECTION 2: Di Atas Motor */}
+            <section
+              className="animate-fade-up"
+              style={{ animationDelay: "180ms" }}
+              data-testid="section-on-motor"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-5 rounded-full bg-[#7DF08F]" />
+                  <h2 className="font-heading font-bold text-white text-base tracking-tight">
+                    Di Atas Motor
+                  </h2>
+                  <span className="text-white/40 text-[10px] uppercase tracking-widest">
+                    Sedang Diantar
+                  </span>
+                </div>
+                <div
+                  className="px-2.5 py-1 rounded-full bg-[#7DF08F]/15 border border-[#7DF08F]/30 text-[#B4F5BF] text-[10px] font-heading font-bold uppercase tracking-widest"
+                  data-testid="motor-count-badge"
+                >
+                  {onMotorOrders.length} Order
+                </div>
+              </div>
+
+              {onMotorOrders.length === 0 ? (
+                <div
+                  className="glass rounded-2xl p-8 flex flex-col items-center gap-2 text-white/40 text-xs"
+                  data-testid="motor-empty"
+                >
+                  <Bike size={28} strokeWidth={1.5} />
+                  <span className="text-white/50 font-heading font-bold text-sm">
+                    Motor kosong
+                  </span>
+                  <span>Scan order untuk mulai pengantaran</span>
+                </div>
+              ) : (
+                <div className="space-y-3" data-testid="motor-list">
+                  {onMotorOrders.map((order, idx) => (
+                    <div
+                      key={order.id}
+                      data-testid={`motor-card-${order.id}`}
+                      className="glass rounded-2xl p-4 space-y-3 animate-fade-up border-white/10"
+                      style={{ animationDelay: `${idx * 60}ms` }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-heading font-extrabold text-white text-base tracking-tight">
+                              {order.id}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-full bg-[#7DF08F]/15 border border-[#7DF08F]/30 text-[#B4F5BF] text-[9px] font-heading font-bold uppercase tracking-widest">
+                              Sedang Diantar
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[9px] font-heading font-bold uppercase tracking-widest border ${
+                                order.paymentStatus === "lunas"
+                                  ? "bg-[#7DF08F]/15 text-[#B4F5BF] border-[#7DF08F]/30"
+                                  : "bg-[#FF8A3D]/15 text-[#FFB98C] border-[#FF8A3D]/30"
+                              }`}
+                              data-testid={`motor-payment-${order.id}`}
+                            >
+                              {order.paymentStatus === "lunas" ? (
+                                <>
+                                  <Wallet size={9} className="inline mr-0.5 -mt-0.5" />
+                                  Lunas
+                                </>
+                              ) : (
+                                <>
+                                  <Clock size={9} className="inline mr-0.5 -mt-0.5" />
+                                  Bayar Nanti
+                                </>
+                              )}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-white/80 text-sm mt-1.5 font-medium">
+                            <UserIcon size={13} className="text-[#FFD700]" />
+                            {order.customer}
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <div className="flex items-center gap-1 text-[#FFD700] text-xs font-heading font-bold">
+                            <Clock size={12} />
+                            {order.eta}
+                          </div>
+                          <div className="text-white/40 text-[10px] mt-0.5">
+                            {order.items}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="space-y-1.5 text-xs">
-                      <div className="flex items-start gap-2 text-white/60">
-                        <MapPin size={13} className="mt-0.5 flex-shrink-0 text-white/40" />
-                        <span className="leading-snug">{order.address}</span>
+                      <div className="space-y-1.5 text-xs">
+                        <div className="flex items-start gap-2 text-white/60">
+                          <MapPin size={13} className="mt-0.5 flex-shrink-0 text-white/40" />
+                          <span className="leading-snug">{order.address}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-white/60">
+                          <Phone size={13} className="text-white/40" />
+                          <span>{order.phone}</span>
+                        </div>
+                        {order.paymentStatus === "nanti" && (
+                          <div className="flex items-center gap-2 text-[#FFB98C] text-[11px] font-medium">
+                            <Receipt size={12} />
+                            <span>Wajib tagih + foto bukti bayar saat serah terima</span>
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 text-white/60">
-                        <Phone size={13} className="text-white/40" />
-                        <span>{order.phone}</span>
-                      </div>
-                    </div>
 
-                    <button
-                      onClick={() => openPoD(order)}
-                      data-testid={`pod-button-${order.id}`}
-                      className="w-full h-12 rounded-xl bg-[#FFD700] text-black font-heading font-extrabold text-sm tracking-wide flex items-center justify-center gap-2 hover:bg-[#ffdf33] transition-all active:scale-[0.97] shadow-[0_6px_20px_rgba(255,215,0,0.25)]"
-                    >
-                      <Camera size={16} strokeWidth={2.5} />
-                      BUKTI TERIMA (SELESAI)
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+                      <button
+                        onClick={() => openPoD(order)}
+                        data-testid={`pod-button-${order.id}`}
+                        className="w-full h-12 rounded-xl bg-[#FFD700] text-black font-heading font-extrabold text-sm tracking-wide flex items-center justify-center gap-2 hover:bg-[#ffdf33] transition-all active:scale-[0.97] shadow-[0_6px_20px_rgba(255,215,0,0.25)]"
+                      >
+                        <CheckCircle2 size={16} strokeWidth={2.5} />
+                        BARANG DITERIMA (AMBIL BUKTI)
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           </TabsContent>
         </Tabs>
       </main>
@@ -410,10 +651,12 @@ export default function CourierDashboard() {
           <DialogHeader>
             <DialogTitle className="font-heading font-bold text-[#FFD700] flex items-center gap-2">
               <ScanLine size={18} />
-              Scan Bag Pickup
+              {scanMode === "motor" ? "Scan Barang Masuk Motor" : "Scan Bag Pickup"}
             </DialogTitle>
             <DialogDescription className="text-white/50 text-xs">
-              Sorot QR code pada tag bag cucian pelanggan.
+              {scanMode === "motor"
+                ? "Sorot QR code pada paket yang siap diantar."
+                : "Sorot QR code pada tag bag cucian pelanggan."}
             </DialogDescription>
           </DialogHeader>
 
@@ -454,7 +697,7 @@ export default function CourierDashboard() {
                 <span className="w-1.5 h-1.5 rounded-full bg-[#FFD700] animate-pulse" />
                 LIVE
               </span>
-              <span>CAM · PICKUP</span>
+              <span>CAM · {scanMode === "motor" ? "MOTOR LOAD" : "PICKUP"}</span>
             </div>
           </div>
 
@@ -485,29 +728,147 @@ export default function CourierDashboard() {
             </DialogDescription>
           </DialogHeader>
 
-          <div
-            className="aspect-square rounded-2xl bg-gradient-to-br from-white/5 to-white/0 border border-white/10 flex items-center justify-center overflow-hidden relative"
-            data-testid="pod-viewport"
-          >
-            {!podCaptured ? (
-              <div className="flex flex-col items-center gap-3 text-white/60">
-                <div className="w-16 h-16 rounded-full border-4 border-[#FFD700]/40 border-t-[#FFD700] animate-spin" />
-                <div className="text-xs uppercase tracking-widest">
-                  Mengambil foto bukti...
+          {/* Step 1: Delivery photo */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-white/70 text-xs font-heading font-bold uppercase tracking-widest flex items-center gap-1.5">
+                <span
+                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
+                    podCaptured
+                      ? "bg-[#FFD700] text-black"
+                      : "bg-white/10 text-white/60 border border-white/15"
+                  }`}
+                >
+                  1
+                </span>
+                Foto Serah Terima
+              </span>
+              {podCaptured && (
+                <span className="text-[#FFD700] text-[10px] font-heading font-bold uppercase tracking-widest">
+                  ✓ Tersimpan
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => capturePhoto("delivery")}
+              disabled={podCaptured || podCapturing !== null}
+              data-testid="pod-capture-delivery"
+              className={`w-full aspect-[2/1] rounded-2xl border-2 border-dashed flex items-center justify-center gap-3 transition-all active:scale-[0.98] ${
+                podCaptured
+                  ? "border-[#FFD700]/40 bg-[#FFD700]/10 text-[#FFD700] cursor-default"
+                  : podCapturing === "delivery"
+                  ? "border-[#FFD700] bg-[#FFD700]/15 text-[#FFD700] cursor-wait"
+                  : "border-[#FFD700]/50 bg-[#FFD700]/5 hover:bg-[#FFD700]/15 text-[#FFD700]"
+              }`}
+            >
+              {podCapturing === "delivery" ? (
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full border-4 border-[#FFD700]/40 border-t-[#FFD700] animate-spin" />
+                  <span className="font-heading font-bold text-sm">
+                    Mengambil foto...
+                  </span>
                 </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2 text-[#FFD700]">
-                <CheckCircle2 size={56} strokeWidth={2} />
-                <div className="font-heading font-bold">Foto tersimpan</div>
-                <div className="text-[11px] text-white/50 font-mono">
-                  pod_{podOrder?.id}_{Date.now()}.jpg
+              ) : podCaptured ? (
+                <div className="flex items-center gap-2.5">
+                  <CheckCircle2 size={28} strokeWidth={2} />
+                  <div className="text-left">
+                    <div className="font-heading font-bold text-sm">
+                      Foto delivery tersimpan
+                    </div>
+                    <div className="text-[10px] text-white/50 font-mono">
+                      pod_{podOrder?.id}.jpg
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="flex items-center gap-2.5">
+                  <Camera size={24} strokeWidth={2.25} />
+                  <span className="font-heading font-bold text-sm tracking-wide">
+                    AMBIL FOTO BUKTI
+                  </span>
+                </div>
+              )}
+            </button>
           </div>
 
-          <div className="flex gap-2 mt-1">
+          {/* Step 2: Payment proof (only for bayar nanti) */}
+          {podPaymentRequired && (
+            <div className="space-y-2 mt-3" data-testid="pod-payment-section">
+              <div className="flex items-center justify-between">
+                <span className="text-white/70 text-xs font-heading font-bold uppercase tracking-widest flex items-center gap-1.5">
+                  <span
+                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
+                      podPaymentCaptured
+                        ? "bg-[#7DF08F] text-black"
+                        : "bg-white/10 text-white/60 border border-white/15"
+                    }`}
+                  >
+                    2
+                  </span>
+                  Foto Bukti Bayar
+                </span>
+                {podPaymentCaptured ? (
+                  <span className="text-[#7DF08F] text-[10px] font-heading font-bold uppercase tracking-widest">
+                    ✓ Tersimpan
+                  </span>
+                ) : (
+                  <span className="text-[#FFB98C] text-[10px] font-heading font-bold uppercase tracking-widest">
+                    Wajib · Bayar Nanti
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => capturePhoto("payment")}
+                disabled={
+                  !podCaptured ||
+                  podPaymentCaptured ||
+                  podCapturing !== null
+                }
+                data-testid="pod-capture-payment"
+                className={`w-full aspect-[2/1] rounded-2xl border-2 border-dashed flex items-center justify-center gap-3 transition-all active:scale-[0.98] ${
+                  podPaymentCaptured
+                    ? "border-[#7DF08F]/40 bg-[#7DF08F]/10 text-[#7DF08F] cursor-default"
+                    : podCapturing === "payment"
+                    ? "border-[#7DF08F] bg-[#7DF08F]/15 text-[#7DF08F] cursor-wait"
+                    : !podCaptured
+                    ? "border-white/10 bg-white/[0.02] text-white/30 cursor-not-allowed"
+                    : "border-[#7DF08F]/50 bg-[#7DF08F]/5 hover:bg-[#7DF08F]/15 text-[#7DF08F]"
+                }`}
+              >
+                {podCapturing === "payment" ? (
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full border-4 border-[#7DF08F]/40 border-t-[#7DF08F] animate-spin" />
+                    <span className="font-heading font-bold text-sm">
+                      Memverifikasi bayar...
+                    </span>
+                  </div>
+                ) : podPaymentCaptured ? (
+                  <div className="flex items-center gap-2.5">
+                    <Receipt size={28} strokeWidth={2} />
+                    <div className="text-left">
+                      <div className="font-heading font-bold text-sm">
+                        Bukti bayar tersimpan
+                      </div>
+                      <div className="text-[10px] text-white/50 font-mono">
+                        {podOrder?.total}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2.5">
+                    <Receipt size={24} strokeWidth={2.25} />
+                    <span className="font-heading font-bold text-sm tracking-wide">
+                      {!podCaptured
+                        ? "Selesaikan foto serah terima dulu"
+                        : "FOTO BUKTI BAYAR"}
+                    </span>
+                  </div>
+                )}
+              </button>
+            </div>
+          )}
+
+          <div className="flex gap-2 mt-2">
             <button
               onClick={() => handleClosePod(false)}
               data-testid="pod-cancel-button"
@@ -517,7 +878,7 @@ export default function CourierDashboard() {
             </button>
             <button
               onClick={confirmDelivery}
-              disabled={!podCaptured}
+              disabled={!podReady}
               data-testid="pod-confirm-button"
               className="flex-1 h-12 rounded-xl bg-[#FFD700] text-black font-heading font-extrabold hover:bg-[#ffdf33] transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 active:scale-95"
             >
