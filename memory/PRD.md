@@ -16,16 +16,17 @@ Mobile-first three-role ops app + Admin Command Center for a laundry business "L
 - **Superadmin** — monitor KPI, atur multi-tier pricing, lihat laporan pegawai, monitor kuota B2B.
 
 ## What's Been Implemented
-### Segment 1 — Cashier POS (/) — iter_1, iter_5, iter_6, iter_7, iter_9 100%
-4-tab order input (Kiloan/Satuan/Sepatu&Karpet/Showcase). **MAJOR UX OVERHAUL (iter_5)** + **Membership Integration (iter_6/7)** + **Regular Customer Save (iter_9)**:
-- Top **search bar** with autocomplete → tracking modal with horizontal stepper.
-- **Nama Pelanggan** + **Sumber Order** select; Kosan = 10% discount.
-- Kiloan **manually typable** + ±0.5 kg buttons; min kg per source (Walk-in 2.0 / Anter Jemput 3.0).
-- **Hitung Detail Item** collapsible · **Multi-photo evidence** · **Payment toggle** Lunas/Bayar Nanti with mandatory bukti for Lunas.
-- **Membership system**: 3 seeded members; auto-deduct kiloan total → Rp 0; receipt shows "SISA KUOTA ANDA: X KG (Hangus pada [date])".
-- **Member Registration Modal** (DAFTAR MEMBER BARU): Nama / WA / Sumber × 3 tier cards.
-- **Regular Customer Save Modal** (SIMPAN PELANGGAN REGULER, outline button): Nama / WA / Alamat all required → autofills cashier name + saves to in-memory regular registry. When sumberOrder='anter' the order is pushed via `lib/orderStore.js` (localStorage + custom event) into the Courier "Menunggu di Outlet" list with full address + phone.
-- Save validation: name → items → payment proof (only if total>0 + Lunas + non-member).
+### Segment 1 — Cashier POS (/) — iter_1, iter_5, iter_6, iter_7, iter_9, iter_10 100%
+4-tab order input + full UX overhaul + membership + regular customer save. **REFACTORED (iter_10)** from ~1921 → 1280 lines:
+- Extracted to `/components/pos/`: `data.js` (all constants), `MembershipModal.jsx`, `RegularCustomerModal.jsx`, `TrackingModal.jsx` (+ TrackingProgress), `QrReceiptModal.jsx`. Parent passes state + setters + callbacks as props.
+- Photo & payment-proof modals remain inline (tightly coupled, small).
+- All data-testids preserved; no regressions across 11 flows.
+
+### Segment 3 — Courier Dashboard (/courier) — iter_3, iter_8, iter_10 100%
+2 tabs JEMPUT + ANTAREUN with 2-section loading flow. **iter_10 addition**: each motor card now has a 2-col grid of `chat-wa-button-{id}` (green, opens `wa.me/{phone}?text=Halo [Nama], kurir LaundryMax sedang OTW ke [Alamat]. Mohon disiapkan tanda terimanya ya!`) + `pod-button-{id}` (yellow).
+
+### Segment 4 — Admin Command Center (/admin) — iter_4, iter_10 100%
+Sidebar console (Overview/Pricing/Staff/B2B). **iter_10 addition**: `PiutangWidget` below Staff Performance card on Overview — 5 mock unpaid orders (Total Rp 241.000) with per-row green `wa-tagihan-{id}` button opening `wa.me` deep link with encoded billing reminder template.
 
 ### Segment 2 — Production Scanner (/production) — iter_2 100%
 2×2 chunky station grid (WASH/DRY/IRON/PACK), animated scanner modal (1.5s mock), Recent Scans list with colored badges.
