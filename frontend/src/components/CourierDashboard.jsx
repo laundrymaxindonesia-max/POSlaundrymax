@@ -25,6 +25,11 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import HeaderNav from "@/components/HeaderNav";
+import {
+  getPendingOrders,
+  removePendingOrder,
+  subscribePendingOrders,
+} from "@/lib/orderStore";
 
 const INITIAL_MANIFEST = [
   { id: "LND-011", customer: "Tamel", weight: "2.5 kg", time: "11:02" },
@@ -112,6 +117,22 @@ export default function CourierDashboard() {
       if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
       if (podTimerRef.current) clearTimeout(podTimerRef.current);
     };
+  }, []);
+
+  // Sync orders pushed from Cashier (Anter Jemput) into ready list
+  useEffect(() => {
+    const sync = () => {
+      const stored = getPendingOrders();
+      if (stored.length === 0) return;
+      setReadyOrders((prev) => {
+        const existing = new Set(prev.map((o) => o.id));
+        const fresh = stored.filter((o) => !existing.has(o.id));
+        if (fresh.length === 0) return prev;
+        return [...fresh, ...prev];
+      });
+    };
+    sync();
+    return subscribePendingOrders(sync);
   }, []);
 
   const handleScanPickup = () => {
@@ -214,6 +235,7 @@ export default function CourierDashboard() {
   const confirmDelivery = () => {
     if (!podReady || !podOrder) return;
     setOnMotorOrders((prev) => prev.filter((d) => d.id !== podOrder.id));
+    removePendingOrder(podOrder.id);
     toast.success("Order Selesai Diantar!", {
       description: `${podOrder.id} · ${podOrder.customer}`,
     });

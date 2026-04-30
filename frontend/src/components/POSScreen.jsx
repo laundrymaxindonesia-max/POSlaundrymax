@@ -30,6 +30,8 @@ import {
   Crown,
   Phone,
   Gift,
+  MapPin,
+  NotebookPen,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -49,6 +51,7 @@ import {
 import { toast } from "sonner";
 import { QRCodeCanvas } from "qrcode.react";
 import HeaderNav from "@/components/HeaderNav";
+import { pushPendingOrder } from "@/lib/orderStore";
 
 const SATUAN_ITEMS = [
   { id: "kemeja", name: "Kemeja", price: 15000 },
@@ -372,6 +375,13 @@ export default function POSScreen() {
   const [regSource, setRegSource] = useState("tamel");
   const [regSelectedTier, setRegSelectedTier] = useState("Gold");
 
+  // Regular (non-member) customers — needed so kurir can deliver
+  const [regularCustomers, setRegularCustomers] = useState([]);
+  const [regCustOpen, setRegCustOpen] = useState(false);
+  const [regCustName, setRegCustName] = useState("");
+  const [regCustWa, setRegCustWa] = useState("");
+  const [regCustAddress, setRegCustAddress] = useState("");
+
   const activeMember = useMemo(() => {
     const q = customerName.trim().toLowerCase();
     if (!q) return null;
@@ -380,6 +390,21 @@ export default function POSScreen() {
       null
     );
   }, [customerName, members]);
+
+  // Combined profile lookup for the typed customer name (member OR regular)
+  const customerProfile = useMemo(() => {
+    const q = customerName.trim().toLowerCase();
+    if (!q) return null;
+    const member = members.find((m) => m.name.toLowerCase() === q);
+    if (member) {
+      return { name: member.name, wa: member.wa, address: "", kind: "member" };
+    }
+    const reg = regularCustomers.find((c) => c.name.toLowerCase() === q);
+    if (reg) {
+      return { ...reg, kind: "regular" };
+    }
+    return null;
+  }, [customerName, members, regularCustomers]);
 
   const selectedSource = SOURCE_OPTIONS.find((s) => s.id === sumberOrder);
   const minKg = selectedSource?.minKg ?? 0;
@@ -544,6 +569,30 @@ export default function POSScreen() {
     } else {
       setReceiptUsedMembership(false);
       setReceiptMemberSnapshot(null);
+    }
+
+    // For Anter Jemput orders, push the order to the courier pipeline so kurir
+    // sees it in the "Menunggu di Outlet" list with the right address + WA.
+    if (sumberOrder === "anter") {
+      const itemsLabelParts = [];
+      if (kiloanKg > 0) itemsLabelParts.push(`${kiloanKg.toFixed(1)} kg Kiloan`);
+      const satuanCount = Object.values(satuanCounts).reduce((a, b) => a + b, 0);
+      if (satuanCount > 0) itemsLabelParts.push(`${satuanCount} pcs Satuan`);
+      const sepatuCount = Object.values(sepatuCounts).reduce((a, b) => a + b, 0);
+      if (sepatuCount > 0) itemsLabelParts.push(`${sepatuCount} pcs Sepatu/Karpet`);
+      const showcaseCount = Object.values(showcaseCounts).reduce((a, b) => a + b, 0);
+      if (showcaseCount > 0) itemsLabelParts.push(`${showcaseCount} pcs Showcase`);
+
+      pushPendingOrder({
+        id,
+        customer: customerName.trim(),
+        address: customerProfile?.address || "Alamat belum tercatat",
+        phone: customerProfile?.wa || "—",
+        eta: "—",
+        items: itemsLabelParts.join(" · ") || "Order",
+        total: usingMembership ? "Rp 0 · Membership" : formatIDR(total),
+        paymentStatus: usingMembership ? "lunas" : paymentStatus,
+      });
     }
 
     setQrOpen(true);
@@ -763,18 +812,56 @@ export default function POSScreen() {
               </div>
             )}
 
-            {/* Daftar Member button */}
-            <button
-              onClick={() => {
-                setRegName(customerName || "");
-                setRegisterOpen(true);
-              }}
-              data-testid="register-member-button"
-              className="mt-2 w-full h-11 rounded-xl border border-[#FFD700]/40 bg-gradient-to-r from-[#FFD700]/15 to-[#FFD700]/5 hover:from-[#FFD700]/25 hover:to-[#FFD700]/10 text-[#FFD700] font-heading font-bold text-sm tracking-wide flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-            >
-              <Sparkles size={15} strokeWidth={2.5} />
-              DAFTAR MEMBER BARU
-            </button>
+            {/* Daftar Member button + Save Regular Customer button */}
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  setRegName(customerName || "");
+                  setRegisterOpen(true);
+                }}
+                data-testid="register-member-button"
+                className="h-11 rounded-xl border border-[#FFD700]/40 bg-gradient-to-r from-[#FFD700]/15 to-[#FFD700]/5 hover:from-[#FFD700]/25 hover:to-[#FFD700]/10 text-[#FFD700] font-heading font-bold text-xs tracking-wide flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+              >
+                <Sparkles size={14} strokeWidth={2.5} />
+                DAFTAR MEMBER BARU
+              </button>
+              <button
+                onClick={() => {
+                  setRegCustName(customerName || "");
+                  setRegCustWa("");
+                  setRegCustAddress("");
+                  setRegCustOpen(true);
+                }}
+                data-testid="register-regular-button"
+                className="h-11 rounded-xl border-2 border-[#FFD700]/40 bg-transparent hover:bg-[#FFD700]/5 hover:border-[#FFD700]/70 text-[#FFD700]/90 hover:text-[#FFD700] font-heading font-bold text-xs tracking-wide flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+              >
+                <NotebookPen size={14} strokeWidth={2.5} />
+                SIMPAN PELANGGAN REGULER
+              </button>
+            </div>
+
+            {/* Saved-regular-customer hint (when typed name matches saved regular) */}
+            {customerProfile?.kind === "regular" && (
+              <div
+                className="mt-2 rounded-xl border border-white/10 bg-white/[0.03] p-2.5 flex items-start gap-2"
+                data-testid="regular-customer-hint"
+              >
+                <NotebookPen size={13} className="text-[#FFD700] mt-0.5 flex-shrink-0" />
+                <div className="text-[11px] text-white/60 leading-snug min-w-0">
+                  <span className="font-heading font-bold text-white/80">
+                    Pelanggan reguler tersimpan
+                  </span>
+                  <div className="flex items-center gap-1.5 mt-0.5 text-white/50">
+                    <Phone size={10} />
+                    <span className="font-mono">{customerProfile.wa}</span>
+                  </div>
+                  <div className="flex items-start gap-1.5 mt-0.5 text-white/50">
+                    <MapPin size={10} className="mt-0.5 flex-shrink-0" />
+                    <span className="truncate">{customerProfile.address}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -1683,6 +1770,137 @@ export default function POSScreen() {
             >
               <Sparkles size={16} strokeWidth={2.5} />
               Daftar
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Regular Customer Save Modal */}
+      <Dialog open={regCustOpen} onOpenChange={setRegCustOpen}>
+        <DialogContent
+          className="bg-[#111111] border-white/10 text-white max-w-md rounded-3xl"
+          data-testid="regular-customer-modal"
+        >
+          <DialogHeader>
+            <DialogTitle className="font-heading font-bold text-[#FFD700] flex items-center gap-2">
+              <NotebookPen size={18} />
+              Data Pelanggan Baru (Reguler)
+            </DialogTitle>
+            <DialogDescription className="text-white/50 text-xs">
+              Simpan kontak & alamat agar kurir bisa antar-jemput dengan tepat.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-white/50 text-[10px] uppercase tracking-widest mb-1.5 block font-medium">
+                Nama Lengkap
+              </label>
+              <div className="relative">
+                <User
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#FFD700]"
+                />
+                <input
+                  type="text"
+                  value={regCustName}
+                  onChange={(e) => setRegCustName(e.target.value)}
+                  placeholder="Nama lengkap pelanggan"
+                  data-testid="reg-cust-name-input"
+                  className="w-full h-11 pl-9 pr-3 rounded-xl bg-[#0a0a0a] border border-white/10 focus:border-[#FFD700]/50 focus:outline-none text-white text-sm transition-colors"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-white/50 text-[10px] uppercase tracking-widest mb-1.5 block font-medium">
+                Nomor WhatsApp
+              </label>
+              <div className="relative">
+                <Phone
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#FFD700]"
+                />
+                <input
+                  type="tel"
+                  value={regCustWa}
+                  onChange={(e) => setRegCustWa(e.target.value)}
+                  placeholder="08xxxxxxxxxx"
+                  data-testid="reg-cust-wa-input"
+                  className="w-full h-11 pl-9 pr-3 rounded-xl bg-[#0a0a0a] border border-white/10 focus:border-[#FFD700]/50 focus:outline-none text-white text-sm font-mono transition-colors"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-white/50 text-[10px] uppercase tracking-widest mb-1.5 block font-medium">
+                Alamat Lengkap / Nama Kosan & No. Kamar
+              </label>
+              <div className="relative">
+                <MapPin
+                  size={14}
+                  className="absolute left-3 top-3 text-[#FFD700]"
+                />
+                <textarea
+                  value={regCustAddress}
+                  onChange={(e) => setRegCustAddress(e.target.value)}
+                  placeholder="Jl. ... / Kosan ... Kamar No. ..."
+                  data-testid="reg-cust-address-input"
+                  rows={3}
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#0a0a0a] border border-white/10 focus:border-[#FFD700]/50 focus:outline-none text-white text-sm transition-colors resize-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => setRegCustOpen(false)}
+              data-testid="reg-cust-cancel-button"
+              className="flex-1 h-12 rounded-xl bg-white/5 border border-white/10 text-white/80 font-medium hover:bg-white/10 transition-colors"
+            >
+              Batal
+            </button>
+            <button
+              onClick={() => {
+                const n = regCustName.trim();
+                const w = regCustWa.trim();
+                const a = regCustAddress.trim();
+                if (!n) {
+                  toast.error("Isi nama lengkap dulu");
+                  return;
+                }
+                if (!w) {
+                  toast.error("Isi nomor WhatsApp dulu");
+                  return;
+                }
+                if (!a) {
+                  toast.error("Isi alamat dulu");
+                  return;
+                }
+                setRegularCustomers((prev) => {
+                  const idx = prev.findIndex(
+                    (c) => c.name.toLowerCase() === n.toLowerCase()
+                  );
+                  const entry = { name: n, wa: w, address: a };
+                  if (idx >= 0) {
+                    const copy = [...prev];
+                    copy[idx] = entry;
+                    return copy;
+                  }
+                  return [...prev, entry];
+                });
+                setCustomerName(n);
+                setRegCustOpen(false);
+                toast.success("Data pelanggan reguler berhasil disimpan!", {
+                  description: `${n} · ${w}`,
+                });
+              }}
+              data-testid="reg-cust-save-button"
+              className="flex-1 h-12 rounded-xl bg-[#FFD700] text-black font-heading font-extrabold flex items-center justify-center gap-2 hover:bg-[#ffdf33] active:scale-95 transition-all shadow-[0_8px_30px_rgba(255,215,0,0.25)]"
+            >
+              <NotebookPen size={16} strokeWidth={2.5} />
+              Simpan Data
             </button>
           </div>
         </DialogContent>
