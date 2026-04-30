@@ -14,6 +14,7 @@ import {
   Wallet,
   Receipt,
   PackageCheck,
+  MessageCircle,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -629,14 +630,32 @@ export default function CourierDashboard() {
                         )}
                       </div>
 
-                      <button
-                        onClick={() => openPoD(order)}
-                        data-testid={`pod-button-${order.id}`}
-                        className="w-full h-12 rounded-xl bg-[#FFD700] text-black font-heading font-extrabold text-sm tracking-wide flex items-center justify-center gap-2 hover:bg-[#ffdf33] transition-all active:scale-[0.97] shadow-[0_6px_20px_rgba(255,215,0,0.25)]"
-                      >
-                        <CheckCircle2 size={16} strokeWidth={2.5} />
-                        BARANG DITERIMA (AMBIL BUKTI)
-                      </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => {
+                            const phone = (order.phone || "").replace(/\D/g, "");
+                            const msg = `Halo ${order.customer}, kurir LaundryMax sedang OTW ke ${order.address}. Mohon disiapkan tanda terimanya ya!`;
+                            window.open(
+                              `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`,
+                              "_blank",
+                              "noopener"
+                            );
+                          }}
+                          data-testid={`chat-wa-button-${order.id}`}
+                          className="h-12 rounded-xl border-2 border-[#25D366]/40 bg-[#25D366]/10 hover:bg-[#25D366]/20 hover:border-[#25D366]/70 text-[#25D366] font-heading font-extrabold text-xs tracking-wide flex items-center justify-center gap-1.5 transition-all active:scale-[0.97]"
+                        >
+                          <MessageCircle size={15} strokeWidth={2.5} />
+                          CHAT WA
+                        </button>
+                        <button
+                          onClick={() => openPoD(order)}
+                          data-testid={`pod-button-${order.id}`}
+                          className="h-12 rounded-xl bg-[#FFD700] text-black font-heading font-extrabold text-xs tracking-wide flex items-center justify-center gap-1.5 hover:bg-[#ffdf33] transition-all active:scale-[0.97] shadow-[0_6px_20px_rgba(255,215,0,0.25)]"
+                        >
+                          <CheckCircle2 size={15} strokeWidth={2.5} />
+                          DITERIMA
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

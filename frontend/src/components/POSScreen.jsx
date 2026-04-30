@@ -11,7 +11,6 @@ import {
   ShoppingBag,
   X,
   CheckCircle2,
-  Printer,
   Search,
   Package,
   ChevronDown,
@@ -21,16 +20,11 @@ import {
   Receipt,
   Calendar,
   Trash2,
-  Truck,
-  Bike,
-  Store,
-  Building2,
-  Star,
   Sparkles,
   Crown,
-  Phone,
-  Gift,
+  Star,
   MapPin,
+  Phone,
   NotebookPen,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -49,182 +43,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { QRCodeCanvas } from "qrcode.react";
 import HeaderNav from "@/components/HeaderNav";
 import { pushPendingOrder } from "@/lib/orderStore";
+import {
+  KILOAN_PRICE,
+  SATUAN_ITEMS,
+  SEPATU_ITEMS,
+  SHOWCASE_ITEMS,
+  KILOAN_DETAIL_ITEMS,
+  SOURCE_OPTIONS,
+  MOCK_ORDERS,
+  STAGES,
+  INITIAL_MEMBERS,
+  TIER_STYLE,
+  formatIDR,
+} from "@/components/pos/data";
+import MembershipModal from "@/components/pos/MembershipModal";
+import RegularCustomerModal from "@/components/pos/RegularCustomerModal";
+import TrackingModal from "@/components/pos/TrackingModal";
+import QrReceiptModal from "@/components/pos/QrReceiptModal";
 
-const SATUAN_ITEMS = [
-  { id: "kemeja", name: "Kemeja", price: 15000 },
-  { id: "celana", name: "Celana", price: 15000 },
-  { id: "jas", name: "Jas", price: 15000 },
-  { id: "kaos", name: "Kaos", price: 15000 },
-  { id: "jaket", name: "Jaket", price: 15000 },
-];
-
-const SEPATU_ITEMS = [
-  { id: "sepatu", name: "Sepatu", price: 30000 },
-  { id: "karpet", name: "Karpet", price: 30000 },
-  { id: "tas", name: "Tas", price: 30000 },
-];
-
-const SHOWCASE_ITEMS = [
-  { id: "gas", name: "Gas Isi", price: 20000 },
-  { id: "air", name: "Air Mineral", price: 20000 },
-  { id: "detergen", name: "Detergen Kiloan", price: 20000 },
-];
-
-const KILOAN_DETAIL_ITEMS = [
-  { id: "kemeja", name: "Kemeja" },
-  { id: "celana", name: "Celana" },
-  { id: "kaos", name: "Kaos" },
-  { id: "celana_dalam", name: "Celana Dalam" },
-  { id: "kaos_kaki", name: "Kaos Kaki" },
-];
-
-const KILOAN_PRICE = 6000;
-
-const SOURCE_OPTIONS = [
-  { id: "walkin", label: "Walk-in", sub: "Langsung datang ke outlet", Icon: Store, minKg: 2.0 },
-  { id: "tamel", label: "Outlet Tamel", sub: "Pickup dari Hotel Tamel", Icon: Building2, minKg: 0 },
-  { id: "anter", label: "Anter Jemput", sub: "Dijemput kurir ke lokasi", Icon: Bike, minKg: 3.0 },
-  { id: "kosan", label: "Kosan Kerjasama", sub: "B2B — diskon 10%", Icon: Truck, minKg: 0 },
-];
-
-const MOCK_ORDERS = [
-  { id: "LND-001", customer: "Budi Santoso", kg: 4.5, date: "28 Feb 2026", stage: 3 },
-  { id: "LND-002", customer: "Siti Rahayu", kg: 2.0, date: "28 Feb 2026", stage: 2 },
-  { id: "LND-003", customer: "Andi Wijaya", kg: 6.5, date: "28 Feb 2026", stage: 1 },
-  { id: "LND-004", customer: "Ratna Dewi", kg: 3.0, date: "27 Feb 2026", stage: 4 },
-  { id: "LND-005", customer: "Rudi Hartono", kg: 5.5, date: "27 Feb 2026", stage: 5 },
-  { id: "LND-006", customer: "Dina Kurniawan", kg: 1.5, date: "27 Feb 2026", stage: 0 },
-];
-
-const STAGES = ["Antrian", "Cuci", "Kering", "Setrika", "Packing", "OTW/Diambil"];
-
-// Membership packages — pricing depends on registration source
-const MEMBER_PACKAGES = {
-  tamel: [
-    {
-      tier: "Silver",
-      kg: 15,
-      price: 120000,
-      Icon: Star,
-      accent: "#A0A0A0",
-      benefits: ["Cuci kiloan 15 kg", "Setrika gratis", "Pickup outlet"],
-    },
-    {
-      tier: "Gold",
-      kg: 21,
-      price: 150000,
-      Icon: Sparkles,
-      accent: "#FFD700",
-      benefits: ["Cuci kiloan 21 kg", "Setrika gratis", "Free 1× cuci jas"],
-    },
-    {
-      tier: "Platinum",
-      kg: 30,
-      price: 200000,
-      Icon: Crown,
-      accent: "#E0BBFF",
-      benefits: [
-        "Cuci kiloan 30 kg",
-        "Free Cuci Sepatu",
-        "Free Cuci Bedcover",
-        "Priority pickup",
-      ],
-    },
-  ],
-  umum: [
-    {
-      tier: "Silver",
-      kg: 20,
-      price: 120000,
-      Icon: Star,
-      accent: "#A0A0A0",
-      benefits: ["Cuci kiloan 20 kg", "Setrika gratis", "Antar gratis ≥5 kg"],
-    },
-    {
-      tier: "Gold",
-      kg: 25,
-      price: 150000,
-      Icon: Sparkles,
-      accent: "#FFD700",
-      benefits: ["Cuci kiloan 25 kg", "Setrika gratis", "Free 1× cuci jas"],
-    },
-    {
-      tier: "Platinum",
-      kg: 35,
-      price: 200000,
-      Icon: Crown,
-      accent: "#E0BBFF",
-      benefits: [
-        "Cuci kiloan 35 kg",
-        "Free Cuci Sepatu",
-        "Free Cuci Bedcover",
-        "Priority antar-jemput",
-      ],
-    },
-  ],
-};
-
-const MEMBER_SOURCE_OPTIONS = [
-  { id: "tamel", label: "Outlet Tamel" },
-  { id: "umum", label: "Umum / Lainnya" },
-];
-
-const INITIAL_MEMBERS = [
-  {
-    name: "Budi Santoso",
-    wa: "0812-3456-7890",
-    tier: "Gold",
-    quotaKg: 25,
-    remainingKg: 12.5,
-    expiry: "18 Mei 2026",
-    source: "umum",
-  },
-  {
-    name: "Siti Rahayu",
-    wa: "0813-2345-6789",
-    tier: "Silver",
-    quotaKg: 20,
-    remainingKg: 8.0,
-    expiry: "22 April 2026",
-    source: "umum",
-  },
-  {
-    name: "Andi Wijaya",
-    wa: "0821-4567-8901",
-    tier: "Platinum",
-    quotaKg: 35,
-    remainingKg: 25.0,
-    expiry: "10 Juni 2026",
-    source: "umum",
-  },
-];
-
-const TIER_STYLE = {
-  Silver: {
-    bg: "bg-white/5",
-    border: "border-white/20",
-    text: "text-white/80",
-    badge: "bg-white/10 text-white border-white/20",
-  },
-  Gold: {
-    bg: "bg-[#FFD700]/10",
-    border: "border-[#FFD700]/40",
-    text: "text-[#FFD700]",
-    badge: "bg-[#FFD700]/15 text-[#FFD700] border-[#FFD700]/40",
-  },
-  Platinum: {
-    bg: "bg-[#E0BBFF]/10",
-    border: "border-[#E0BBFF]/40",
-    text: "text-[#E0BBFF]",
-    badge: "bg-[#E0BBFF]/15 text-[#E0BBFF] border-[#E0BBFF]/40",
-  },
-};
-
-const formatIDR = (n) =>
-  "Rp " + Math.round(n).toLocaleString("id-ID").replace(/,/g, ".");
 
 const CounterBtn = ({ onClick, children, testid, variant = "default", disabled = false }) => (
   <button
@@ -275,55 +113,6 @@ const ItemRow = ({ item, count, onInc, onDec, idx }) => (
     </div>
   </div>
 );
-
-function TrackingProgress({ stage }) {
-  return (
-    <div className="space-y-3">
-      <div className="relative px-2 pt-8 pb-2">
-        <div className="absolute left-6 right-6 top-12 h-1 bg-white/10 rounded-full" />
-        <div
-          className="absolute left-6 top-12 h-1 bg-gradient-to-r from-[#FFD700] to-[#FFE966] rounded-full transition-all duration-700"
-          style={{
-            width: `calc((100% - 48px) * ${stage / (STAGES.length - 1)})`,
-          }}
-        />
-        <div className="relative flex justify-between">
-          {STAGES.map((s, i) => {
-            const done = i <= stage;
-            return (
-              <div
-                key={s}
-                className="flex flex-col items-center gap-2 flex-1"
-                data-testid={`track-stage-${i}`}
-              >
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
-                    done
-                      ? "bg-[#FFD700] border-[#FFD700] text-black shadow-[0_0_12px_rgba(255,215,0,0.5)]"
-                      : "bg-[#1a1a1a] border-white/15 text-white/40"
-                  }`}
-                >
-                  {done ? (
-                    <CheckCircle2 size={14} strokeWidth={2.5} />
-                  ) : (
-                    <span className="text-[10px] font-heading font-bold">{i + 1}</span>
-                  )}
-                </div>
-                <span
-                  className={`text-[9px] font-heading font-bold uppercase tracking-wider text-center leading-tight ${
-                    done ? "text-[#FFD700]" : "text-white/40"
-                  }`}
-                >
-                  {s}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function POSScreen() {
   // Customer
@@ -1423,488 +1212,69 @@ export default function POSScreen() {
       </Dialog>
 
       {/* Tracking modal */}
-      <Dialog open={!!trackOrder} onOpenChange={(o) => !o && setTrackOrder(null)}>
-        <DialogContent
-          className="bg-[#111111] border-white/10 text-white max-w-md rounded-3xl"
-          data-testid="tracking-modal"
-        >
-          <DialogHeader>
-            <DialogTitle className="font-heading font-bold text-[#FFD700] flex items-center gap-2">
-              <Package size={18} />
-              {trackOrder?.id}
-            </DialogTitle>
-            <DialogDescription className="text-white/60 text-xs flex items-center gap-2">
-              <span>{trackOrder?.customer}</span>
-              <span className="text-white/30">·</span>
-              <span>{trackOrder?.kg} kg</span>
-              <span className="text-white/30">·</span>
-              <span className="flex items-center gap-1">
-                <Calendar size={10} />
-                {trackOrder?.date}
-              </span>
-            </DialogDescription>
-          </DialogHeader>
-          {trackOrder && <TrackingProgress stage={trackOrder.stage} />}
-          <div className="p-3 rounded-xl bg-[#FFD700]/5 border border-[#FFD700]/20 text-xs text-white/70 leading-relaxed">
-            Status saat ini:{" "}
-            <span className="font-heading font-bold text-[#FFD700]">
-              {trackOrder && STAGES[trackOrder.stage]}
-            </span>
-            . Estimasi selesai dalam{" "}
-            {trackOrder && Math.max(1, STAGES.length - 1 - trackOrder.stage)}{" "}
-            tahap lagi.
-          </div>
-          <button
-            onClick={() => setTrackOrder(null)}
-            className="w-full h-11 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors"
-            data-testid="tracking-close"
-          >
-            Tutup
-          </button>
-        </DialogContent>
-      </Dialog>
+      <TrackingModal order={trackOrder} onClose={() => setTrackOrder(null)} />
 
       {/* QR modal */}
-      <Dialog open={qrOpen} onOpenChange={setQrOpen}>
-        <DialogContent className="bg-[#111111] border-white/10 text-white max-w-sm rounded-3xl">
-          <DialogHeader>
-            <DialogTitle className="font-heading font-bold text-[#FFD700] text-xl">
-              Order Tersimpan
-            </DialogTitle>
-            <DialogDescription className="text-white/50 text-xs">
-              Scan QR code berikut di stasiun produksi untuk memperbarui status.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col items-center gap-4 py-2">
-            <div className="bg-white p-4 rounded-2xl shadow-[0_0_40px_rgba(255,215,0,0.2)]">
-              <QRCodeCanvas
-                value={qrPayload || "LAUNDRYMAX"}
-                size={200}
-                bgColor="#FFFFFF"
-                fgColor="#000000"
-                level="M"
-                data-testid="qr-code-canvas"
-              />
-            </div>
-            <div className="text-center space-y-1">
-              <div
-                className="font-mono text-[#FFD700] text-sm tracking-wider"
-                data-testid="order-id-display"
-              >
-                {orderId}
-              </div>
-              <div className="text-white/50 text-xs">
-                {customerName} ·{" "}
-                {SOURCE_OPTIONS.find((s) => s.id === sumberOrder)?.label} ·{" "}
-                {totalItemsCount} item
-              </div>
-              <div className="flex items-center justify-center gap-2 mt-1">
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold uppercase tracking-widest border ${
-                    paymentStatus === "lunas" || receiptUsedMembership
-                      ? "bg-[#7DF08F]/15 text-[#B4F5BF] border-[#7DF08F]/30"
-                      : "bg-[#FF8A3D]/15 text-[#FFB98C] border-[#FF8A3D]/30"
-                  }`}
-                >
-                  {receiptUsedMembership
-                    ? "Membership"
-                    : paymentStatus === "lunas"
-                    ? "Lunas"
-                    : "Bayar Nanti"}
-                </span>
-              </div>
-              <div className="font-heading font-bold text-white text-2xl pt-1">
-                {formatIDR(total)}
-              </div>
-
-              {receiptUsedMembership && receiptMemberSnapshot && (
-                <div
-                  className={`mt-3 mx-2 p-3 rounded-xl border-2 border-dashed ${TIER_STYLE[receiptMemberSnapshot.tier].border} ${TIER_STYLE[receiptMemberSnapshot.tier].bg}`}
-                  data-testid="receipt-membership-line"
-                >
-                  <div className="text-[10px] uppercase tracking-widest text-white/50 font-medium">
-                    Sisa Kuota Anda
-                  </div>
-                  <div
-                    className={`font-heading font-black text-2xl tracking-tight ${TIER_STYLE[receiptMemberSnapshot.tier].text}`}
-                  >
-                    {receiptRemainingKg.toFixed(1)} KG
-                  </div>
-                  <div className="text-white/40 text-[10px] mt-0.5 flex items-center justify-center gap-1">
-                    <Clock size={10} />
-                    Hangus pada {receiptMemberSnapshot.expiry}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => toast.success("Struk dicetak")}
-              className="flex-1 h-12 rounded-xl bg-[#FFD700] text-black font-heading font-bold hover:bg-[#ffdf33] transition-colors flex items-center justify-center gap-2 active:scale-95"
-              data-testid="print-receipt-button"
-            >
-              <Printer size={16} /> Cetak
-            </button>
-            <button
-              onClick={() => {
-                resetAll();
-                toast.success("Transaksi baru siap");
-              }}
-              className="flex-1 h-12 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors"
-              data-testid="new-order-button"
-            >
-              Order Baru
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <QrReceiptModal
+        open={qrOpen}
+        onOpenChange={setQrOpen}
+        orderId={orderId}
+        customerName={customerName}
+        sumberOrder={sumberOrder}
+        totalItemsCount={totalItemsCount}
+        total={total}
+        paymentStatus={paymentStatus}
+        receiptUsedMembership={receiptUsedMembership}
+        receiptMemberSnapshot={receiptMemberSnapshot}
+        receiptRemainingKg={receiptRemainingKg}
+        qrPayload={qrPayload}
+        onNewOrder={resetAll}
+      />
 
       {/* Membership Registration Modal */}
-      <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
-        <DialogContent
-          className="bg-[#111111] border-white/10 text-white max-w-md rounded-3xl max-h-[90vh] overflow-y-auto no-scrollbar"
-          data-testid="register-modal"
-        >
-          <DialogHeader>
-            <DialogTitle className="font-heading font-bold text-[#FFD700] flex items-center gap-2">
-              <Sparkles size={18} />
-              Daftar Member Baru
-            </DialogTitle>
-            <DialogDescription className="text-white/50 text-xs">
-              Pilih paket bulanan sesuai kebutuhan pelanggan.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            {/* Name */}
-            <div>
-              <label className="text-white/50 text-[10px] uppercase tracking-widest mb-1.5 block font-medium">
-                Nama
-              </label>
-              <div className="relative">
-                <User
-                  size={14}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#FFD700]"
-                />
-                <input
-                  type="text"
-                  value={regName}
-                  onChange={(e) => setRegName(e.target.value)}
-                  placeholder="Nama lengkap"
-                  data-testid="register-name-input"
-                  className="w-full h-11 pl-9 pr-3 rounded-xl bg-[#0a0a0a] border border-white/10 focus:border-[#FFD700]/50 focus:outline-none text-white text-sm transition-colors"
-                />
-              </div>
-            </div>
-
-            {/* WA */}
-            <div>
-              <label className="text-white/50 text-[10px] uppercase tracking-widest mb-1.5 block font-medium">
-                Nomor WA
-              </label>
-              <div className="relative">
-                <Phone
-                  size={14}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#FFD700]"
-                />
-                <input
-                  type="tel"
-                  value={regWa}
-                  onChange={(e) => setRegWa(e.target.value)}
-                  placeholder="08xxxxxxxxxx"
-                  data-testid="register-wa-input"
-                  className="w-full h-11 pl-9 pr-3 rounded-xl bg-[#0a0a0a] border border-white/10 focus:border-[#FFD700]/50 focus:outline-none text-white text-sm font-mono transition-colors"
-                />
-              </div>
-            </div>
-
-            {/* Source */}
-            <div>
-              <label className="text-white/50 text-[10px] uppercase tracking-widest mb-1.5 block font-medium">
-                Sumber
-              </label>
-              <Select value={regSource} onValueChange={setRegSource}>
-                <SelectTrigger
-                  data-testid="register-source-dropdown"
-                  className="w-full h-11 bg-[#0a0a0a] border-white/10 hover:border-[#FFD700]/50 rounded-xl text-sm focus:ring-[#FFD700] focus:ring-offset-0"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
-                  {MEMBER_SOURCE_OPTIONS.map((opt) => (
-                    <SelectItem
-                      key={opt.id}
-                      value={opt.id}
-                      data-testid={`register-source-${opt.id}`}
-                      className="focus:bg-[#FFD700]/10 focus:text-[#FFD700]"
-                    >
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Package cards */}
-            <div>
-              <label className="text-white/50 text-[10px] uppercase tracking-widest mb-2 block font-medium">
-                Pilih Paket
-              </label>
-              <div
-                className="space-y-2"
-                data-testid="register-packages"
-              >
-                {MEMBER_PACKAGES[regSource].map((pkg) => {
-                  const selected = regSelectedTier === pkg.tier;
-                  return (
-                    <button
-                      key={pkg.tier}
-                      onClick={() => setRegSelectedTier(pkg.tier)}
-                      data-testid={`register-package-${pkg.tier.toLowerCase()}`}
-                      className={`w-full text-left rounded-2xl border-2 p-4 transition-all active:scale-[0.99] ${
-                        selected
-                          ? `${TIER_STYLE[pkg.tier].border} ${TIER_STYLE[pkg.tier].bg} shadow-[0_0_20px_rgba(255,215,0,0.15)]`
-                          : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05]"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3 min-w-0">
-                          <div
-                            className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${TIER_STYLE[pkg.tier].badge}`}
-                          >
-                            <pkg.Icon size={18} strokeWidth={2.25} />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={`font-heading font-extrabold text-base tracking-tight ${TIER_STYLE[pkg.tier].text}`}
-                              >
-                                {pkg.tier}
-                              </span>
-                              <span className="text-white/40 text-xs">
-                                · {pkg.kg} kg/bulan
-                              </span>
-                            </div>
-                            <div
-                              className={`font-heading font-bold text-lg leading-tight mt-0.5 text-white`}
-                            >
-                              {formatIDR(pkg.price)}
-                            </div>
-                          </div>
-                        </div>
-                        {selected && (
-                          <div
-                            className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${TIER_STYLE[pkg.tier].badge} border`}
-                          >
-                            <CheckCircle2 size={14} strokeWidth={2.5} />
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-3 pt-3 border-t border-white/5 space-y-1">
-                        {pkg.benefits.map((b, i) => (
-                          <div
-                            key={i}
-                            className="flex items-start gap-2 text-[11px] text-white/60"
-                          >
-                            <Gift
-                              size={11}
-                              className={`mt-0.5 flex-shrink-0 ${TIER_STYLE[pkg.tier].text}`}
-                            />
-                            <span>{b}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={() => setRegisterOpen(false)}
-              data-testid="register-cancel-button"
-              className="flex-1 h-12 rounded-xl bg-white/5 border border-white/10 text-white/80 font-medium hover:bg-white/10 transition-colors"
-            >
-              Batal
-            </button>
-            <button
-              onClick={() => {
-                if (!regName.trim()) {
-                  toast.error("Isi nama dulu");
-                  return;
-                }
-                if (!regWa.trim()) {
-                  toast.error("Isi nomor WA dulu");
-                  return;
-                }
-                const pkg = MEMBER_PACKAGES[regSource].find(
-                  (p) => p.tier === regSelectedTier
-                );
-                const expiry = new Date(Date.now() + 30 * 86400 * 1000).toLocaleDateString(
-                  "id-ID",
-                  { day: "numeric", month: "long", year: "numeric" }
-                );
-                const newMember = {
-                  name: regName.trim(),
-                  wa: regWa.trim(),
-                  tier: pkg.tier,
-                  quotaKg: pkg.kg,
-                  remainingKg: pkg.kg,
-                  expiry,
-                  source: regSource,
-                };
-                setMembers((prev) => [...prev, newMember]);
-                setCustomerName(regName.trim());
-                setRegisterOpen(false);
-                setRegWa("");
-                toast.success(`Member ${pkg.tier} terdaftar`, {
-                  description: `${regName.trim()} · ${pkg.kg} kg/bulan`,
-                });
-              }}
-              data-testid="register-confirm-button"
-              className="flex-1 h-12 rounded-xl bg-[#FFD700] text-black font-heading font-extrabold flex items-center justify-center gap-2 hover:bg-[#ffdf33] active:scale-95 transition-all shadow-[0_8px_30px_rgba(255,215,0,0.25)]"
-            >
-              <Sparkles size={16} strokeWidth={2.5} />
-              Daftar
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <MembershipModal
+        open={registerOpen}
+        onOpenChange={setRegisterOpen}
+        regName={regName}
+        setRegName={setRegName}
+        regWa={regWa}
+        setRegWa={setRegWa}
+        regSource={regSource}
+        setRegSource={setRegSource}
+        regSelectedTier={regSelectedTier}
+        setRegSelectedTier={setRegSelectedTier}
+        onRegister={(newMember) => {
+          setMembers((prev) => [...prev, newMember]);
+          setCustomerName(newMember.name);
+          setRegisterOpen(false);
+          setRegWa("");
+        }}
+      />
 
       {/* Regular Customer Save Modal */}
-      <Dialog open={regCustOpen} onOpenChange={setRegCustOpen}>
-        <DialogContent
-          className="bg-[#111111] border-white/10 text-white max-w-md rounded-3xl"
-          data-testid="regular-customer-modal"
-        >
-          <DialogHeader>
-            <DialogTitle className="font-heading font-bold text-[#FFD700] flex items-center gap-2">
-              <NotebookPen size={18} />
-              Data Pelanggan Baru (Reguler)
-            </DialogTitle>
-            <DialogDescription className="text-white/50 text-xs">
-              Simpan kontak & alamat agar kurir bisa antar-jemput dengan tepat.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <div>
-              <label className="text-white/50 text-[10px] uppercase tracking-widest mb-1.5 block font-medium">
-                Nama Lengkap
-              </label>
-              <div className="relative">
-                <User
-                  size={14}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#FFD700]"
-                />
-                <input
-                  type="text"
-                  value={regCustName}
-                  onChange={(e) => setRegCustName(e.target.value)}
-                  placeholder="Nama lengkap pelanggan"
-                  data-testid="reg-cust-name-input"
-                  className="w-full h-11 pl-9 pr-3 rounded-xl bg-[#0a0a0a] border border-white/10 focus:border-[#FFD700]/50 focus:outline-none text-white text-sm transition-colors"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-white/50 text-[10px] uppercase tracking-widest mb-1.5 block font-medium">
-                Nomor WhatsApp
-              </label>
-              <div className="relative">
-                <Phone
-                  size={14}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#FFD700]"
-                />
-                <input
-                  type="tel"
-                  value={regCustWa}
-                  onChange={(e) => setRegCustWa(e.target.value)}
-                  placeholder="08xxxxxxxxxx"
-                  data-testid="reg-cust-wa-input"
-                  className="w-full h-11 pl-9 pr-3 rounded-xl bg-[#0a0a0a] border border-white/10 focus:border-[#FFD700]/50 focus:outline-none text-white text-sm font-mono transition-colors"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-white/50 text-[10px] uppercase tracking-widest mb-1.5 block font-medium">
-                Alamat Lengkap / Nama Kosan & No. Kamar
-              </label>
-              <div className="relative">
-                <MapPin
-                  size={14}
-                  className="absolute left-3 top-3 text-[#FFD700]"
-                />
-                <textarea
-                  value={regCustAddress}
-                  onChange={(e) => setRegCustAddress(e.target.value)}
-                  placeholder="Jl. ... / Kosan ... Kamar No. ..."
-                  data-testid="reg-cust-address-input"
-                  rows={3}
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#0a0a0a] border border-white/10 focus:border-[#FFD700]/50 focus:outline-none text-white text-sm transition-colors resize-none"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={() => setRegCustOpen(false)}
-              data-testid="reg-cust-cancel-button"
-              className="flex-1 h-12 rounded-xl bg-white/5 border border-white/10 text-white/80 font-medium hover:bg-white/10 transition-colors"
-            >
-              Batal
-            </button>
-            <button
-              onClick={() => {
-                const n = regCustName.trim();
-                const w = regCustWa.trim();
-                const a = regCustAddress.trim();
-                if (!n) {
-                  toast.error("Isi nama lengkap dulu");
-                  return;
-                }
-                if (!w) {
-                  toast.error("Isi nomor WhatsApp dulu");
-                  return;
-                }
-                if (!a) {
-                  toast.error("Isi alamat dulu");
-                  return;
-                }
-                setRegularCustomers((prev) => {
-                  const idx = prev.findIndex(
-                    (c) => c.name.toLowerCase() === n.toLowerCase()
-                  );
-                  const entry = { name: n, wa: w, address: a };
-                  if (idx >= 0) {
-                    const copy = [...prev];
-                    copy[idx] = entry;
-                    return copy;
-                  }
-                  return [...prev, entry];
-                });
-                setCustomerName(n);
-                setRegCustOpen(false);
-                toast.success("Data pelanggan reguler berhasil disimpan!", {
-                  description: `${n} · ${w}`,
-                });
-              }}
-              data-testid="reg-cust-save-button"
-              className="flex-1 h-12 rounded-xl bg-[#FFD700] text-black font-heading font-extrabold flex items-center justify-center gap-2 hover:bg-[#ffdf33] active:scale-95 transition-all shadow-[0_8px_30px_rgba(255,215,0,0.25)]"
-            >
-              <NotebookPen size={16} strokeWidth={2.5} />
-              Simpan Data
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <RegularCustomerModal
+        open={regCustOpen}
+        onOpenChange={setRegCustOpen}
+        name={regCustName}
+        setName={setRegCustName}
+        wa={regCustWa}
+        setWa={setRegCustWa}
+        address={regCustAddress}
+        setAddress={setRegCustAddress}
+        onSave={(entry) => {
+          setRegularCustomers((prev) => {
+            const idx = prev.findIndex((c) => c.name.toLowerCase() === entry.name.toLowerCase());
+            if (idx >= 0) {
+              const copy = [...prev];
+              copy[idx] = entry;
+              return copy;
+            }
+            return [...prev, entry];
+          });
+          setCustomerName(entry.name);
+          setRegCustOpen(false);
+        }}
+      />
     </div>
   );
 }
