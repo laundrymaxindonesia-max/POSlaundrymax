@@ -5,10 +5,12 @@ Mobile-first three-role ops app + Admin Command Center for a laundry business "L
 
 ## Architecture
 - **Frontend**: React 19 + react-router-dom, Tailwind, shadcn UI (Tabs/Select/Dialog), Sonner toasts, lucide-react, qrcode.react, recharts.
-- **Backend** (boot: iter_13): FastAPI 0.110 + Motor 3.3 (async MongoDB) + Pydantic v2. Package layout:
-  - `/app/backend/server.py` — app entry, CORS, legacy StatusCheck routes, `/api/health` (Mongo ping).
-  - `/app/backend/db.py` — single Motor client + 6 collection handles (`orders_col`, `customers_col`, `prices_col`, `b2b_quotas_col`, `staff_col`, `attendance_col`) + `ping()/close()` helpers.
-  - `/app/backend/models/` — one file per domain: `order.py`, `customer.py`, `price.py`, `b2b_quota.py`, `staff.py`, `attendance.py`. Each exports Base + Create + stored model with uuid `id` + `created_at` UTC.
+- **Backend** (boot: iter_13, STEP 2 iter_14): FastAPI 0.110 + Motor 3.3 (async MongoDB) + Pydantic v2. Package layout:
+  - `/app/backend/server.py` — app entry, CORS, legacy StatusCheck routes, `/api/health` (Mongo ping), mounts `orders_router` + `seed_router` under `/api`.
+  - `/app/backend/db.py` — single Motor client + 6 collection handles + `ping()/close()`.
+  - `/app/backend/models/` — one file per domain model (Order/Customer/Price/B2BQuota/Staff/Attendance). Order model now includes `order_events: List[OrderEvent]` audit log.
+  - `/app/backend/routes/` — `orders.py` (POST/GET/GET-by-id/PATCH status), `seed.py` (POST /api/seed/orders → deterministic 35-order seed across all statuses & payment types).
+  - `/app/backend/utils/__init__.py` — `serialize_for_mongo` / `deserialize_from_mongo` (datetime ↔ ISO str).
 - Routes: `/` Cashier · `/production` Production · `/courier` Courier · `/dashboard` Pipeline · `/absen` HR Kiosk · `/admin` Admin.
 - Shared `HeaderNav` 6-pill group on every screen with active-route highlight; labels hide below `lg` breakpoint.
 - Typography: Outfit (headings) + Poppins (body).
@@ -80,13 +82,13 @@ Desktop sidebar layout (mobile drawer via burger menu) with mock auth badge "Sup
 - Pricing save & price-row delete/add buttons are non-functional (UI only).
 
 ## Backlog
-### Backend roadmap (in progress — STEP 1/N done iter_13)
-- ✅ **STEP 1** — FastAPI boilerplate + 6 Pydantic models + Mongo connection + /api/health (iter_13).
-- **STEP 2** — CRUD routes for orders (POST/GET/PATCH status transitions) + seed script.
-- **STEP 3** — Customers + prices + B2B quota CRUD, wire Admin UI to live prices.
+### Backend roadmap (in progress)
+- ✅ **STEP 1** (iter_13) — FastAPI boilerplate + 6 Pydantic models + Mongo connection + /api/health.
+- ✅ **STEP 2** (iter_14) — Order model gains `order_events[]` audit log (status + timestamp + actor). POST/GET/GET-by-id/PATCH orders endpoints. POST /api/seed/orders → 35 deterministic orders across all 7 statuses. `/dashboard` frontend rewired to fetch live aggregates (KPIs + 7 stage cards + throughput chart) from `/api/orders?since=...`; seed-btn + refresh-btn added. 100% backend & frontend tests pass (iter_14).
+- **STEP 3** — Customers + Prices + B2B Quotas CRUD; wire Admin UI to live prices.
 - **STEP 4** — Staff + Attendance CRUD, wire /absen clock-in/out to real DB + file storage for selfies.
 - **STEP 5** — Real auth (JWT or Emergent Google) with role-gated routes.
-- **STEP 6** — Wire POS/Courier/Production/Pipeline dashboards to real APIs, drop all mock data.
+- **STEP 6** — Wire POS/Courier/Production to real APIs, drop all mock data.
 
 ### Frontend backlog
 - **P0** Real auth (Google OAuth via Emergent or JWT) with role-gated routes (cashier/worker/courier/admin).
