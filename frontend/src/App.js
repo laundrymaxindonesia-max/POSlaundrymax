@@ -5,6 +5,7 @@ import ProductionScanner from "@/components/ProductionScanner";
 import CourierDashboard from "@/components/CourierDashboard";
 import AdminDashboard from "@/components/AdminDashboard";
 import PipelineDashboard from "@/components/PipelineDashboard";
+import AttendanceKiosk from "@/components/AttendanceKiosk";
 import { Toaster } from "@/components/ui/sonner";
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
           <Route path="/production" element={<ProductionScanner />} />
           <Route path="/courier" element={<CourierDashboard />} />
           <Route path="/dashboard" element={<PipelineDashboard />} />
+          <Route path="/absen" element={<AttendanceKiosk />} />
           <Route path="/admin" element={<AdminDashboard />} />
         </Routes>
       </BrowserRouter>

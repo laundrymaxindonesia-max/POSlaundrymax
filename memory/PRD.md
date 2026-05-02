@@ -5,8 +5,8 @@ Mobile-first three-role ops app + Admin Command Center for a laundry business "L
 
 ## Architecture
 - **Frontend only**. React 19 + react-router-dom, Tailwind, shadcn UI (Tabs/Select/Dialog), Sonner toasts, lucide-react, qrcode.react, recharts.
-- Routes: `/` Cashier · `/production` Production · `/courier` Courier · `/admin` Admin.
-- Shared `HeaderNav` 4-pill group on every screen with active-route highlight.
+- Routes: `/` Cashier · `/production` Production · `/courier` Courier · `/dashboard` Pipeline · `/admin` Admin.
+- Shared `HeaderNav` 5-pill group on every screen with active-route highlight; labels hide below `lg` breakpoint.
 - Typography: Outfit (headings) + Poppins (body).
 
 ## User Personas
@@ -27,6 +27,14 @@ Mobile-first three-role ops app + Admin Command Center for a laundry business "L
 
 ### Segment 4 — Admin Command Center (/admin) — iter_4, iter_10 100%
 Sidebar console (Overview/Pricing/Staff/B2B). **iter_10 addition**: `PiutangWidget` below Staff Performance card on Overview — 5 mock unpaid orders (Total Rp 241.000) with per-row green `wa-tagihan-{id}` button opening `wa.me` deep link with encoded billing reminder template.
+
+### Segment 5 — Pipeline Dashboard (/dashboard) — iter_11 100%
+Wide analytical view for global operations monitoring.
+- Date-range dropdown top-right: Hari Ini / Minggu Ini / Bulan Ini with distinct mock datasets (100/420/1580 orders).
+- 4 summary KPIs: Total Order · Total Kilogram · In-Progress · Completion Rate.
+- Pipeline funnel grid of 7 stage cards (Antrian Cuci → Sudah Dicuci → Sudah Dikeringkan → Sudah Disetrika → Sudah Dipacking → Sedang Diantar → Selesai) — each with icon, count, kg, % of total, color-coded progress bar.
+- Recharts AreaChart throughput: 7 hourly buckets (Today), 7 daily (Week), 30 date buckets (Month).
+- Added `nav-dashboard` pill (5th) to shared HeaderNav.
 
 ### Segment 2 — Production Scanner (/production) — iter_2 100%
 2×2 chunky station grid (WASH/DRY/IRON/PACK), animated scanner modal (1.5s mock), Recent Scans list with colored badges.

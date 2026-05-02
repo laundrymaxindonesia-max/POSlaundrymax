@@ -5,6 +5,7 @@ import {
   Truck,
   ShieldCheck,
   LineChart,
+  Fingerprint,
 } from "lucide-react";
 
 const ITEMS = [
@@ -12,6 +13,7 @@ const ITEMS = [
   { to: "/production", label: "Produksi", Icon: Factory, testid: "nav-production" },
   { to: "/courier", label: "Kurir", Icon: Truck, testid: "nav-courier" },
   { to: "/dashboard", label: "Dashboard", Icon: LineChart, testid: "nav-dashboard" },
+  { to: "/absen", label: "Absensi", Icon: Fingerprint, testid: "nav-absen" },
   { to: "/admin", label: "Admin", Icon: ShieldCheck, testid: "nav-admin" },
 ];
 
