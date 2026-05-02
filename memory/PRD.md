@@ -4,7 +4,11 @@
 Mobile-first three-role ops app + Admin Command Center for a laundry business "LaundryMax". Strict Wolverine theme (#FFD700 + #111111), glassmorphism, micro-animations. React + Tailwind + shadcn UI.
 
 ## Architecture
-- **Frontend only**. React 19 + react-router-dom, Tailwind, shadcn UI (Tabs/Select/Dialog), Sonner toasts, lucide-react, qrcode.react, recharts.
+- **Frontend**: React 19 + react-router-dom, Tailwind, shadcn UI (Tabs/Select/Dialog), Sonner toasts, lucide-react, qrcode.react, recharts.
+- **Backend** (boot: iter_13): FastAPI 0.110 + Motor 3.3 (async MongoDB) + Pydantic v2. Package layout:
+  - `/app/backend/server.py` — app entry, CORS, legacy StatusCheck routes, `/api/health` (Mongo ping).
+  - `/app/backend/db.py` — single Motor client + 6 collection handles (`orders_col`, `customers_col`, `prices_col`, `b2b_quotas_col`, `staff_col`, `attendance_col`) + `ping()/close()` helpers.
+  - `/app/backend/models/` — one file per domain: `order.py`, `customer.py`, `price.py`, `b2b_quota.py`, `staff.py`, `attendance.py`. Each exports Base + Create + stored model with uuid `id` + `created_at` UTC.
 - Routes: `/` Cashier · `/production` Production · `/courier` Courier · `/dashboard` Pipeline · `/absen` HR Kiosk · `/admin` Admin.
 - Shared `HeaderNav` 6-pill group on every screen with active-route highlight; labels hide below `lg` breakpoint.
 - Typography: Outfit (headings) + Poppins (body).
@@ -76,6 +80,15 @@ Desktop sidebar layout (mobile drawer via burger menu) with mock auth badge "Sup
 - Pricing save & price-row delete/add buttons are non-functional (UI only).
 
 ## Backlog
+### Backend roadmap (in progress — STEP 1/N done iter_13)
+- ✅ **STEP 1** — FastAPI boilerplate + 6 Pydantic models + Mongo connection + /api/health (iter_13).
+- **STEP 2** — CRUD routes for orders (POST/GET/PATCH status transitions) + seed script.
+- **STEP 3** — Customers + prices + B2B quota CRUD, wire Admin UI to live prices.
+- **STEP 4** — Staff + Attendance CRUD, wire /absen clock-in/out to real DB + file storage for selfies.
+- **STEP 5** — Real auth (JWT or Emergent Google) with role-gated routes.
+- **STEP 6** — Wire POS/Courier/Production/Pipeline dashboards to real APIs, drop all mock data.
+
+### Frontend backlog
 - **P0** Real auth (Google OAuth via Emergent or JWT) with role-gated routes (cashier/worker/courier/admin).
 - **P1** FastAPI + MongoDB: `/api/orders`, `/api/orders/:id/status`, `/api/manifest`, `/api/deliveries`, `/api/prices`, `/api/staff/reports`, `/api/b2b/quotas`. Persist all state.
 - **P1** Real camera (`getUserMedia`) + Cloudflare R2 storage for evidence/PoD photos.
