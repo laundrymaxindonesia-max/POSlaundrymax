@@ -1,0 +1,35 @@
+{
+  "summary": "Backend STEP 2 (Orders CRUD + Seed + Dashboard wire-up) tested end-to-end. 18/18 backend pytest tests passed (seed distribution, list/filter/limit, get-by-id 404, event-chain invariant, POST 201/409, PATCH 200/404/422). Frontend /dashboard verified: pipeline-dashboard mounts, seed-btn triggers POST /api/seed/orders, KPIs populate from live API (not mock 100/420/1580), all 7 stage cards render (stage-antrian/cuci/kering/setrika/packing/otw/selesai), throughput-chart renders, refresh-btn re-fetches, range dropdown today/week/month re-queries with proper since param. Smoke-checked /, /production, /courier, /admin, /absen — all load without console errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/dashboard 'Hari Ini' range after fresh seed", "issues": ["Seed spreads created_at uniformly 0.2-14h backward. When seeding shortly after UTC midnight, only ~1 order falls within 'Hari Ini' (local midnight cutoff), making the 'Hari Ini' KPI feel misleadingly low until 'Bulan Ini' is selected. Switching to month correctly shows 35. Not a bug — but consider clamping seed to 'today' or noting 'demo data' in UI."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_orders_seed.py",
+    "/app/test_reports/pytest/iter13_orders.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/orders.py line 74 uses since.isoformat() string compare on created_at — works because created_at is also stored as ISO string (utils.serialize_for_mongo), but lexicographic compare relies on consistent timezone formatting. Consider normalising to UTC explicitly to avoid edge cases if any code path ever inserts a naive/local datetime.",
+    "models/order.py: OrderCreate inherits OrderBase which already includes order_status with default 'Antrian'. Acceptable, but note clients can theoretically POST an order with order_status='Selesai' and a single seeded event mismatching the chain. No validation enforces creation must start at 'Antrian'. Low priority.",
+    "PATCH /orders/{id}/status does not validate the transition follows STATUS_CHAIN order — any status can be jumped to. If business logic requires sequential transitions, add a check. (Currently no test enforces this — OK per spec.)",
+    "PipelineDashboard.jsx aggregate(): when range='today' the throughput chart only counts Selesai orders bucketed by event timestamp; on a fresh seed in the early morning UTC most Selesai orders fall before todayStart so chart often renders mostly zero buckets. Minor UX nuance, not a defect."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_orders_seed.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "N/A — no auth on these endpoints",
+  "seed_data_creation": "POST /api/seed/orders inserts 35 deterministic orders. Test class also creates TEST-BE-1 via POST /api/orders and transitions it via PATCH; not cleaned up (next seed will wipe it).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All Orders CRUD + Seed + Dashboard endpoints are now real Mongo-backed. Other routes (/, /production, /courier, /admin, /absen) remain frontend-only mocks per spec — only smoke-tested. The seed endpoint is destructive (delete_many({})). For future tests: TEST-BE-1 may already exist if seed was not run before tests; current test_create_order will fail with 409 in that case — wrap in cleanup if reused.",
+  "rca of the issue": "No bugs found."
+}

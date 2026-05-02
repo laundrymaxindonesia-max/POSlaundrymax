@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   LineChart as LineChartIcon,
   Droplets,
@@ -12,6 +12,9 @@ import {
   Package,
   Scale,
   Activity,
+  RefreshCw,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import {
   AreaChart,
@@ -29,16 +32,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 import HeaderNav from "@/components/HeaderNav";
 
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
 const STAGE_DEFS = [
-  { id: "antrian", label: "Antrian Cuci", Icon: Hourglass, color: "#FF8A3D" },
-  { id: "washed", label: "Sudah Dicuci", Icon: Droplets, color: "#3DA5FF" },
-  { id: "dried", label: "Sudah Dikeringkan", Icon: Wind, color: "#9EDDFF" },
-  { id: "ironed", label: "Sudah Disetrika", Icon: Shirt, color: "#FFD700" },
-  { id: "packed", label: "Sudah Dipacking", Icon: PackageCheck, color: "#E0BBFF" },
-  { id: "delivery", label: "Sedang Diantar", Icon: Bike, color: "#7DF08F" },
-  { id: "done", label: "Selesai", Icon: CheckCircle2, color: "#B4F5BF" },
+  { id: "Antrian", label: "Antrian Cuci", Icon: Hourglass, color: "#FF8A3D" },
+  { id: "Cuci", label: "Sudah Dicuci", Icon: Droplets, color: "#3DA5FF" },
+  { id: "Kering", label: "Sudah Dikeringkan", Icon: Wind, color: "#9EDDFF" },
+  { id: "Setrika", label: "Sudah Disetrika", Icon: Shirt, color: "#FFD700" },
+  { id: "Packing", label: "Sudah Dipacking", Icon: PackageCheck, color: "#E0BBFF" },
+  { id: "OTW", label: "Sedang Diantar", Icon: Bike, color: "#7DF08F" },
+  { id: "Selesai", label: "Selesai", Icon: CheckCircle2, color: "#B4F5BF" },
 ];
 
 const RANGE_OPTIONS = [
@@ -47,75 +53,115 @@ const RANGE_OPTIONS = [
   { id: "month", label: "Bulan Ini" },
 ];
 
-// Mock distributions that add up to each range's total.
-const PIPELINE_DATA = {
-  today: {
-    total: 100,
-    totalKg: 385,
-    stages: {
-      antrian: { count: 18, kg: 72 },
-      washed: { count: 14, kg: 58 },
-      dried: { count: 12, kg: 48 },
-      ironed: { count: 15, kg: 52 },
-      packed: { count: 10, kg: 38 },
-      delivery: { count: 9, kg: 35 },
-      done: { count: 22, kg: 82 },
-    },
-    trend: [
-      { label: "08:00", orders: 4 },
-      { label: "10:00", orders: 8 },
-      { label: "12:00", orders: 14 },
-      { label: "14:00", orders: 18 },
-      { label: "16:00", orders: 22 },
-      { label: "18:00", orders: 16 },
-      { label: "20:00", orders: 8 },
-    ],
-    trendLabel: "Order selesai per jam",
-  },
-  week: {
-    total: 420,
-    totalKg: 1612,
-    stages: {
-      antrian: { count: 42, kg: 168 },
-      washed: { count: 38, kg: 145 },
-      dried: { count: 35, kg: 132 },
-      ironed: { count: 48, kg: 182 },
-      packed: { count: 32, kg: 122 },
-      delivery: { count: 28, kg: 108 },
-      done: { count: 197, kg: 755 },
-    },
-    trend: [
-      { label: "Sen", orders: 55 },
-      { label: "Sel", orders: 62 },
-      { label: "Rab", orders: 48 },
-      { label: "Kam", orders: 70 },
-      { label: "Jum", orders: 78 },
-      { label: "Sab", orders: 72 },
-      { label: "Min", orders: 35 },
-    ],
-    trendLabel: "Order selesai per hari",
-  },
-  month: {
-    total: 1580,
-    totalKg: 6120,
-    stages: {
-      antrian: { count: 120, kg: 465 },
-      washed: { count: 115, kg: 442 },
-      dried: { count: 108, kg: 415 },
-      ironed: { count: 142, kg: 548 },
-      packed: { count: 98, kg: 378 },
-      delivery: { count: 85, kg: 328 },
-      done: { count: 912, kg: 3544 },
-    },
-    trend: Array.from({ length: 30 }, (_, i) => ({
-      label: `${i + 1}`,
-      orders: Math.round(40 + Math.sin(i / 3) * 15 + Math.random() * 25),
-    })),
-    trendLabel: "Order selesai per tanggal",
-  },
-};
-
 const formatInt = (n) => n.toLocaleString("id-ID").replace(/,/g, ".");
+
+function rangeSinceIso(range) {
+  const now = new Date();
+  if (range === "today") {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    return start.toISOString();
+  }
+  if (range === "week") {
+    const start = new Date(now);
+    start.setDate(start.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+    return start.toISOString();
+  }
+  // month
+  const start = new Date(now);
+  start.setDate(start.getDate() - 29);
+  start.setHours(0, 0, 0, 0);
+  return start.toISOString();
+}
+
+function aggregate(orders, range) {
+  const stages = {};
+  for (const s of STAGE_DEFS) stages[s.id] = { count: 0, kg: 0 };
+
+  let total = 0;
+  let totalKg = 0;
+  for (const o of orders) {
+    total += 1;
+    totalKg += Number(o.weight_kg || 0);
+    if (stages[o.order_status]) {
+      stages[o.order_status].count += 1;
+      stages[o.order_status].kg += Number(o.weight_kg || 0);
+    }
+  }
+
+  // Build throughput buckets keyed off `Selesai` event timestamps when available,
+  // otherwise fall back to created_at.
+  let buckets = [];
+  if (range === "today") {
+    const hourBins = [8, 10, 12, 14, 16, 18, 20];
+    buckets = hourBins.map((h) => ({ label: `${String(h).padStart(2, "0")}:00`, orders: 0, hour: h }));
+    const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    for (const o of orders) {
+      if (o.order_status !== "Selesai") continue;
+      const lastEvent = (o.order_events || []).slice(-1)[0];
+      const ts = lastEvent ? new Date(lastEvent.timestamp) : new Date(o.created_at);
+      if (ts < todayStart) continue;
+      const h = ts.getHours();
+      let best = buckets[0];
+      let bestDist = Math.abs(h - best.hour);
+      for (const b of buckets) {
+        const d = Math.abs(h - b.hour);
+        if (d < bestDist) {
+          best = b;
+          bestDist = d;
+        }
+      }
+      best.orders += 1;
+    }
+  } else if (range === "week") {
+    const labels = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    buckets = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - (6 - i));
+      return { label: labels[d.getDay()], orders: 0, key: d.toDateString() };
+    });
+    const byKey = Object.fromEntries(buckets.map((b) => [b.key, b]));
+    for (const o of orders) {
+      const ts = new Date(o.created_at);
+      ts.setHours(0, 0, 0, 0);
+      const k = ts.toDateString();
+      if (byKey[k]) byKey[k].orders += 1;
+    }
+  } else {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    buckets = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - (29 - i));
+      return { label: `${d.getDate()}`, orders: 0, key: d.toDateString() };
+    });
+    const byKey = Object.fromEntries(buckets.map((b) => [b.key, b]));
+    for (const o of orders) {
+      const ts = new Date(o.created_at);
+      ts.setHours(0, 0, 0, 0);
+      const k = ts.toDateString();
+      if (byKey[k]) byKey[k].orders += 1;
+    }
+  }
+
+  return {
+    total,
+    totalKg: Math.round(totalKg),
+    stages,
+    trend: buckets,
+    trendLabel:
+      range === "today"
+        ? "Order selesai per jam"
+        : range === "week"
+        ? "Order dibuat per hari"
+        : "Order dibuat per tanggal",
+  };
+}
 
 function KpiChip({ label, value, sub, Icon, accent, testid }) {
   return (
@@ -144,9 +190,7 @@ function KpiChip({ label, value, sub, Icon, accent, testid }) {
           <div className="font-heading font-black text-white text-xl md:text-2xl tracking-tight leading-tight mt-0.5">
             {value}
           </div>
-          {sub && (
-            <div className="text-white/40 text-[10px] mt-0.5">{sub}</div>
-          )}
+          {sub && <div className="text-white/40 text-[10px] mt-0.5">{sub}</div>}
         </div>
       </div>
     </div>
@@ -158,7 +202,7 @@ function StageCard({ stage, data, percent, maxCount, idx }) {
   const widthPct = Math.max(6, (data.count / Math.max(1, maxCount)) * 100);
   return (
     <div
-      data-testid={`stage-${stage.id}`}
+      data-testid={`stage-${stage.id.toLowerCase()}`}
       className="glass rounded-2xl p-4 md:p-5 animate-fade-up hover:border-[#FFD700]/25 transition-colors"
       style={{ animationDelay: `${idx * 50}ms` }}
     >
@@ -211,28 +255,68 @@ function StageCard({ stage, data, percent, maxCount, idx }) {
 
 export default function PipelineDashboard() {
   const [range, setRange] = useState("today");
-  const data = PIPELINE_DATA[range];
-  const rangeLabel = RANGE_OPTIONS.find((r) => r.id === range).label;
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [seeding, setSeeding] = useState(false);
 
+  const load = async (r = range) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const since = rangeSinceIso(r);
+      const res = await fetch(
+        `${API}/orders?since=${encodeURIComponent(since)}&limit=5000`
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setOrders(data);
+    } catch (e) {
+      console.error(e);
+      setError(e.message || "Gagal memuat data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load(range);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range]);
+
+  const data = useMemo(() => aggregate(orders, range), [orders, range]);
+  const rangeLabel = RANGE_OPTIONS.find((r) => r.id === range).label;
   const maxCount = useMemo(
-    () => Math.max(...Object.values(data.stages).map((s) => s.count)),
+    () => Math.max(1, ...Object.values(data.stages).map((s) => s.count)),
     [data]
   );
 
-  const inProgress =
-    data.total - data.stages.done.count;
-  const completionRate = (data.stages.done.count / data.total) * 100;
+  const inProgress = data.total - data.stages.Selesai.count;
+  const completionRate =
+    data.total > 0 ? (data.stages.Selesai.count / data.total) * 100 : 0;
+
+  const runSeed = async () => {
+    if (seeding) return;
+    setSeeding(true);
+    try {
+      const res = await fetch(`${API}/seed/orders`, { method: "POST" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.json();
+      toast.success(`Seed berhasil · ${body.inserted} order`);
+      await load(range);
+    } catch (e) {
+      toast.error(`Seed gagal: ${e.message}`);
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   return (
     <div
       className="relative min-h-screen text-white font-body bg-[#0a0a0a]"
       data-testid="pipeline-dashboard"
     >
-      {/* Top bar */}
-      <header
-        className="sticky top-0 z-30 glass-strong border-b border-white/10 px-4 lg:px-6 py-3 flex items-center justify-between gap-3"
-        data-testid="pipeline-header"
-      >
+      <header className="sticky top-0 z-30 glass-strong border-b border-white/10 px-4 lg:px-6 py-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-[#FFD700] flex items-center justify-center shadow-[0_0_20px_rgba(255,215,0,0.35)]">
             <LineChartIcon size={18} className="text-black" strokeWidth={2.5} />
@@ -265,6 +349,28 @@ export default function PipelineDashboard() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              data-testid="refresh-btn"
+              onClick={() => load(range)}
+              className="h-11 w-11 glass rounded-xl border-white/10 hover:border-[#FFD700]/40 flex items-center justify-center text-[#FFD700] transition-colors active:scale-95"
+              title="Refresh"
+            >
+              {loading ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <RefreshCw size={16} />
+              )}
+            </button>
+            <button
+              data-testid="seed-btn"
+              onClick={runSeed}
+              disabled={seeding}
+              className="h-11 px-3 glass rounded-xl border-white/10 hover:border-[#FFD700]/40 flex items-center gap-1.5 text-[11px] uppercase tracking-widest font-heading font-bold text-white/70 hover:text-[#FFD700] transition-colors active:scale-95 disabled:opacity-40"
+              title="Reset & seed dummy orders"
+            >
+              {seeding ? <Loader2 size={14} className="animate-spin" /> : <Package size={14} />}
+              Seed
+            </button>
             <Select value={range} onValueChange={setRange}>
               <SelectTrigger
                 data-testid="date-range-dropdown"
@@ -291,11 +397,42 @@ export default function PipelineDashboard() {
           </div>
         </section>
 
+        {/* Error banner */}
+        {error && (
+          <div
+            className="glass rounded-2xl border border-red-500/40 bg-red-500/5 p-4 flex items-start gap-3 animate-fade-up"
+            data-testid="error-banner"
+          >
+            <AlertTriangle size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-heading font-bold text-red-300">
+                Gagal memuat data
+              </div>
+              <div className="text-white/60 text-sm mt-0.5">
+                {error}. Periksa koneksi backend atau klik Refresh.
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && !error && orders.length === 0 && (
+          <div
+            className="glass rounded-2xl p-8 text-center animate-fade-up"
+            data-testid="empty-banner"
+          >
+            <div className="text-white/70 font-heading font-bold text-lg">
+              Belum ada order dalam rentang ini
+            </div>
+            <div className="text-white/40 text-sm mt-1">
+              Klik tombol <span className="text-[#FFD700] font-semibold">Seed</span>{" "}
+              untuk mengisi data demo (35 order).
+            </div>
+          </div>
+        )}
+
         {/* Summary KPIs */}
-        <section
-          className="grid grid-cols-2 lg:grid-cols-4 gap-3"
-          data-testid="kpi-row"
-        >
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-testid="kpi-row">
           <KpiChip
             label="Total Order"
             value={formatInt(data.total)}
@@ -315,7 +452,11 @@ export default function PipelineDashboard() {
           <KpiChip
             label="In-Progress"
             value={formatInt(inProgress)}
-            sub={`${((inProgress / data.total) * 100).toFixed(0)}% masih diproses`}
+            sub={
+              data.total > 0
+                ? `${((inProgress / data.total) * 100).toFixed(0)}% masih diproses`
+                : "—"
+            }
             Icon={Hourglass}
             accent="#FF8A3D"
             testid="kpi-in-progress"
@@ -323,14 +464,14 @@ export default function PipelineDashboard() {
           <KpiChip
             label="Completion Rate"
             value={`${completionRate.toFixed(1)}%`}
-            sub={`${formatInt(data.stages.done.count)} order selesai`}
+            sub={`${formatInt(data.stages.Selesai.count)} order selesai`}
             Icon={TrendingUp}
             accent="#7DF08F"
             testid="kpi-completion"
           />
         </section>
 
-        {/* Pipeline funnel / stages grid */}
+        {/* Pipeline stages */}
         <section className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="font-heading font-bold text-white text-lg tracking-tight">
@@ -349,7 +490,11 @@ export default function PipelineDashboard() {
                 key={stage.id}
                 stage={stage}
                 data={data.stages[stage.id]}
-                percent={(data.stages[stage.id].count / data.total) * 100}
+                percent={
+                  data.total > 0
+                    ? (data.stages[stage.id].count / data.total) * 100
+                    : 0
+                }
                 maxCount={maxCount}
                 idx={idx}
               />
@@ -372,7 +517,7 @@ export default function PipelineDashboard() {
             </div>
             <div className="flex items-center gap-1.5 text-[#7DF08F] text-xs font-heading font-bold">
               <TrendingUp size={14} />
-              <span>Healthy flow</span>
+              <span>Live data</span>
             </div>
           </div>
           <div className="h-64 md:h-72 mt-4 -ml-2">
@@ -403,6 +548,7 @@ export default function PipelineDashboard() {
                   tick={{ fill: "#A0A0A0", fontSize: 11, fontFamily: "Poppins" }}
                   axisLine={false}
                   tickLine={false}
+                  allowDecimals={false}
                 />
                 <Tooltip
                   cursor={{ stroke: "#FFD700", strokeOpacity: 0.3, strokeWidth: 1 }}

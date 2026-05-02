@@ -22,6 +22,10 @@ from db import client, db, ping, close  # noqa: F401  (db/client re-exported for
 # Import models package eagerly so schemas are validated at boot
 import models  # noqa: F401
 
+# Domain routers
+from routes.orders import router as orders_router
+from routes.seed import router as seed_router
+
 
 # ---------------- FastAPI app ----------------
 app = FastAPI(title="LaundryMax API", version="0.1.0")
@@ -82,6 +86,8 @@ async def get_status_checks():
 
 
 app.include_router(api_router)
+app.include_router(orders_router, prefix="/api")
+app.include_router(seed_router, prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
