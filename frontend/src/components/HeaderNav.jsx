@@ -1,10 +1,17 @@
 import { NavLink } from "react-router-dom";
-import { Store, Factory, Truck, ShieldCheck } from "lucide-react";
+import {
+  Store,
+  Factory,
+  Truck,
+  ShieldCheck,
+  LineChart,
+} from "lucide-react";
 
 const ITEMS = [
   { to: "/", label: "Kasir", Icon: Store, testid: "nav-cashier" },
   { to: "/production", label: "Produksi", Icon: Factory, testid: "nav-production" },
   { to: "/courier", label: "Kurir", Icon: Truck, testid: "nav-courier" },
+  { to: "/dashboard", label: "Dashboard", Icon: LineChart, testid: "nav-dashboard" },
   { to: "/admin", label: "Admin", Icon: ShieldCheck, testid: "nav-admin" },
 ];
 
@@ -29,7 +36,7 @@ export default function HeaderNav() {
           }
         >
           <Icon size={14} strokeWidth={2.5} />
-          <span className="hidden md:inline">{label}</span>
+          <span className="hidden lg:inline">{label}</span>
         </NavLink>
       ))}
     </div>
