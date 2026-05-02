@@ -113,6 +113,9 @@ export default function AttendanceKiosk() {
 
   const handlePinKeyDown = (idx, e) => {
     if (e.key === "Backspace" && !pin[idx] && idx > 0) {
+      const next = [...pin];
+      next[idx - 1] = "";
+      setPin(next);
       const el = document.getElementById(`pin-${idx - 1}`);
       if (el) el.focus();
     }

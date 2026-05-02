@@ -5,8 +5,8 @@ Mobile-first three-role ops app + Admin Command Center for a laundry business "L
 
 ## Architecture
 - **Frontend only**. React 19 + react-router-dom, Tailwind, shadcn UI (Tabs/Select/Dialog), Sonner toasts, lucide-react, qrcode.react, recharts.
-- Routes: `/` Cashier · `/production` Production · `/courier` Courier · `/dashboard` Pipeline · `/admin` Admin.
-- Shared `HeaderNav` 5-pill group on every screen with active-route highlight; labels hide below `lg` breakpoint.
+- Routes: `/` Cashier · `/production` Production · `/courier` Courier · `/dashboard` Pipeline · `/absen` HR Kiosk · `/admin` Admin.
+- Shared `HeaderNav` 6-pill group on every screen with active-route highlight; labels hide below `lg` breakpoint.
 - Typography: Outfit (headings) + Poppins (body).
 
 ## User Personas
@@ -35,6 +35,16 @@ Wide analytical view for global operations monitoring.
 - Pipeline funnel grid of 7 stage cards (Antrian Cuci → Sudah Dicuci → Sudah Dikeringkan → Sudah Disetrika → Sudah Dipacking → Sedang Diantar → Selesai) — each with icon, count, kg, % of total, color-coded progress bar.
 - Recharts AreaChart throughput: 7 hourly buckets (Today), 7 daily (Week), 30 date buckets (Month).
 - Added `nav-dashboard` pill (5th) to shared HeaderNav.
+
+### Segment 6 — HR Attendance Kiosk (/absen) — iter_12 100%
+Staff clock-in/clock-out kiosk with selfie + geotag + shift-report WA push.
+- Added `nav-absen` pill (6th) to shared HeaderNav (Fingerprint icon).
+- Live tabular digital clock (ticks every 1s, id-ID locale) + date banner.
+- Step 1 — Staff picker: 6 mock staff grid (Erfa/Dedi/Rina/Budi/Siti/Agus) with role badges; selected card turns full-yellow with black initial avatar.
+- Step 2 — 4-digit PIN field with auto-focus forward, backspace clears-and-moves back, password-masked input (1234 demo hint).
+- Dual massive CTA: `ABSEN MASUK` (emerald gradient) + `ABSEN PULANG` (red gradient), both disabled until staff + 4-digit PIN complete.
+- **Clock-In Modal**: mock front-facing viewfinder (silhouette placeholder, blinking corner frames, Live Camera badge, scan line during upload) + bottom info strip `📍 Lokasi: -6.929, 107.774 · ±5m akurat` + live clock + `AMBIL FOTO & CATAT WAKTU` button → 1s mock upload → TERVERIFIKASI overlay → auto-close → success toast → kiosk auto-resets.
+- **Clock-Out Modal**: "Rekap Kinerja Shift" with dual-chip Jam Masuk 07:14 / Jam Pulang 16:15, 6-stat grid (Cuci 35kg/9p, Kering 45kg/10p, Setrika 80kg/28p, Packing 77kg/25p, Pickup 15kg/5p, Delivery 10kg/2p), WA preview card with exact dynamic message, giant green `KIRIM LAPORAN KE WA OWNER` button → `window.open('https://wa.me/628123456789?text=<exact URL-encoded shift template>')` → LAPORAN TERKIRIM → auto-close → kiosk auto-resets.
 
 ### Segment 2 — Production Scanner (/production) — iter_2 100%
 2×2 chunky station grid (WASH/DRY/IRON/PACK), animated scanner modal (1.5s mock), Recent Scans list with colored badges.
