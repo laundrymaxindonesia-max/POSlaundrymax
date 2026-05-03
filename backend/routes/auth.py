@@ -175,6 +175,10 @@ async def me(
     authorization: Optional[str] = Header(default=None),
 ) -> User:
     user = await _resolve_session_from_cookie_or_header(session_token, authorization)
+    # Defense-in-depth: re-enforce the owner whitelist at read time. Protects
+    # against direct session/user-collection tampering via mongosh etc.
+    if (user.get("email") or "").lower().strip() not in OWNER_EMAILS:
+        raise HTTPException(status_code=403, detail="Akun tidak memiliki akses Owner")
     return User(**user)
 
 

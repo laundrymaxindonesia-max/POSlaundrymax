@@ -148,11 +148,20 @@ class TestOwnerSessionSimulation:
         body = r.json()
         assert body["email"] == "theomahrizal@gmail.com"
 
-    def test_me_with_non_whitelisted_session_still_returns_200(self):
-        """Per spec: whitelist only enforced at /session exchange, not /me."""
+    def test_me_with_non_whitelisted_session_returns_403(self):
+        """Defense-in-depth: /me now re-enforces OWNER_EMAILS whitelist at read time.
+
+        A Mongo-injected session for a non-whitelisted email must NOT be admitted.
+        """
         r = requests.get(f"{API}/auth/me", headers={"Authorization": f"Bearer {self.hacker_token}"})
-        assert r.status_code == 200, r.text
-        assert r.json()["email"] == "hacker@gmail.com"
+        assert r.status_code == 403, r.text
+        assert r.json().get("detail") == "Akun tidak memiliki akses Owner"
+
+    def test_me_with_non_whitelisted_cookie_returns_403(self):
+        """Same defense-in-depth check via cookie path (used by browser)."""
+        r = requests.get(f"{API}/auth/me", cookies={"session_token": self.hacker_token})
+        assert r.status_code == 403, r.text
+        assert r.json().get("detail") == "Akun tidak memiliki akses Owner"
 
     def test_logout_deletes_session(self, mongo):
         # Sanity: session exists

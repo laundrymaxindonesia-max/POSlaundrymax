@@ -20,6 +20,7 @@ export default function StaffPinGate({ children }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const firstInputRef = useRef(null);
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
     if (!unlocked && firstInputRef.current) firstInputRef.current.focus();
@@ -48,12 +49,13 @@ export default function StaffPinGate({ children }) {
   };
 
   const tryUnlock = async () => {
-    if (submitting) return;
+    if (submitting || inFlightRef.current) return;
     const pinValue = pin.join("");
     if (pinValue.length !== 4) {
       setError("Masukkan PIN 4 digit");
       return;
     }
+    inFlightRef.current = true;
     setSubmitting(true);
     setError(null);
     try {
@@ -62,12 +64,28 @@ export default function StaffPinGate({ children }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pin_code: pinValue }),
       });
+      // Defensive body read: clone first so any other consumer (React 19 dev
+      // tooling / browser devtools) draining the original stream doesn't break
+      // us. If we still can't recover JSON, fall back to status-based copy.
+      let bodyText = "";
+      try {
+        bodyText = await res.clone().text();
+      } catch (readErr) {
+        try { bodyText = await res.text(); } catch (e2) { /* give up on body */ }
+      }
       if (!res.ok) {
-        let detail = `HTTP ${res.status}`;
+        let detail = "";
         try {
-          const j = await res.json();
-          detail = j.detail || detail;
-        } catch (e) { /* ignore */ }
+          const j = JSON.parse(bodyText);
+          if (j && j.detail) detail = j.detail;
+        } catch (e) { /* bodyText wasn't JSON */ }
+        if (!detail) {
+          // Status-based fallback (covers cases where the body was drained by
+          // dev tooling before we could read it — e.g. React 19 + StrictMode).
+          if (res.status === 403) detail = "PIN salah";
+          else if (res.status === 422) detail = "Masukkan PIN 4 digit";
+          else detail = `HTTP ${res.status}`;
+        }
         throw new Error(detail);
       }
       sessionStorage.setItem(SESSION_KEY, "true");
@@ -82,6 +100,7 @@ export default function StaffPinGate({ children }) {
       }, 50);
     } finally {
       setSubmitting(false);
+      inFlightRef.current = false;
     }
   };
 
