@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Fingerprint,
   UserRound,
@@ -696,8 +696,13 @@ function ClockOutModal({ staffId, staffName, pinCode, onClose, onConfirm }) {
   const [attendance, setAttendance] = useState(null);
   const [error, setError] = useState(null);
   const [reportSent, setReportSent] = useState(false);
+  const firedRef = useRef(false);
 
   useEffect(() => {
+    // React StrictMode double-mounts effects in dev; guard the non-idempotent
+    // POST so it fires exactly once per modal open.
+    if (firedRef.current) return;
+    firedRef.current = true;
     const run = async () => {
       setLoading(true);
       setError(null);

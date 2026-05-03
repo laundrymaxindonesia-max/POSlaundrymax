@@ -112,7 +112,7 @@ async def clock_in(
     filename = f"{staff_id}_{uuid.uuid4().hex[:10]}.{ext}"
     path = UPLOADS_DIR / filename
     path.write_bytes(raw)
-    selfie_url = f"/uploads/attendance/{filename}"
+    selfie_url = f"/api/uploads/attendance/{filename}"
 
     record = Attendance(
         staff_name=staff["name"],

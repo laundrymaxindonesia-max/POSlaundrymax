@@ -90,19 +90,20 @@ class TestClockIn:
         j = r.json()
         assert j["clock_in_time"]
         assert j["clock_out_time"] is None
-        assert j["selfie_url"].startswith("/uploads/attendance/")
+        # NEW PREFIX: StaticFiles is mounted under /api/uploads so the K8s
+        # ingress (/api/*) routes the request to the backend.
+        assert j["selfie_url"].startswith("/api/uploads/attendance/"), j["selfie_url"]
         assert j["geotag_lat"] == -6.929
         assert j["staff_name"] == "Erfa"
 
-        # static files serve the selfie — externally the Kubernetes ingress
-        # only routes /api/* to backend, so test via localhost:8001 to confirm
-        # FastAPI StaticFiles mount actually works. External path reachability
-        # is reported as an ingress / routing issue to the main agent.
-        local_url = f"http://localhost:8001{j['selfie_url']}"
-        sr = requests.get(local_url, timeout=15)
-        assert sr.status_code == 200
-        assert len(sr.content) > 0
-        assert sr.headers.get("content-type", "").startswith("image/")
+        # Reachability via the PUBLIC ingress URL — should now serve the PNG.
+        public_url = f"{BASE_URL}{j['selfie_url']}"
+        sr = requests.get(public_url, timeout=20)
+        assert sr.status_code == 200, f"{sr.status_code} {sr.headers} {sr.text[:200]}"
+        ctype = sr.headers.get("content-type", "")
+        assert ctype.startswith("image/"), f"expected image/*, got {ctype}"
+        # The first 8 bytes of any PNG must be the PNG signature.
+        assert sr.content[:8] == b"\x89PNG\r\n\x1a\n", sr.content[:16]
 
     def test_clock_in_wrong_pin_returns_403(self, staff_list):
         staff_list = _reseed_and_fetch()

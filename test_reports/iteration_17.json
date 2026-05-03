@@ -1,0 +1,33 @@
+{
+  "summary": "Iter 17 retest of STEP 4 HR Kiosk after the two iter_16 fixes. Both fixes verified GREEN. (1) StaticFiles now mounted at /api/uploads — clock-in returns selfie_url starting with '/api/uploads/attendance/'; the public Cloudflare ingress URL responds 200 with content-type image/png and a valid PNG signature. (2) ClockOutModal useRef firedRef guard works: exactly ONE POST /api/attendance/clock-out fires when the clockout-modal opens (was 2 in iter_16); no spurious clockout-error banner appears alongside the successful Rekap. All 15/15 backend pytest cases pass after updating the selfie_url prefix assertion + replacing the localhost reachability check with the public ingress URL check. Frontend /absen E2E happy path renders jam-masuk, jam-pulang, all 6 stat cards (cuci 35/9, kering 45/10, setrika 80/28, packing 77/25, pickup 15/5, delivery 10/2), wa-preview, and KIRIM LAPORAN triggers exactly one window.open to wa.me/628123456789 with name 'Erfa' and all shift numbers (35, 45, 80, 77, 15, 10) present in the URL. Error path (clock-out for staff with no prior clock-in) still legitimately surfaces the HTTP 400 banner. Regressions on /, /production, /courier, /dashboard, /admin all load cleanly with no error elements.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_step4_staff_attendance.py",
+    "/app/test_reports/pytest/iter17_step4.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AttendanceKiosk.jsx is now 923 lines — exceeds the 700-line guideline; main agent should split ClockInModal and ClockOutModal into their own files in a future cleanup pass.",
+    "Attendance pydantic model still has no staff_id field — clock-in/clock-out responses + GET /api/attendance do NOT echo staff_id back; clients must filter by staff_id query param. Consider adding it to the model for symmetry.",
+    "No cleanup/TTL job on /app/backend/uploads/attendance/* — selfie files will accumulate unbounded; add a cron / startup task that purges files older than N days.",
+    "FastAPI's app.on_event('shutdown') is deprecated; migrate to lifespan context manager when convenient (cosmetic, not blocking)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_step4_staff_attendance.py (updated TestClockIn.test_clock_in_happy_path: selfie_url prefix now '/api/uploads/attendance/', and the file reachability check now goes through the PUBLIC ingress URL instead of localhost:8001, validating both content-type=image/* and the PNG signature)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% — clockout fires exactly once, no error banner, all rekap/stats/wa rendered, error path still works, all 5 regression routes load"},
+  "test_credentials": "Default staff PIN for all 6 seeded staff is 1234. No auth tokens needed; kiosk is open.",
+  "seed_data_creation": "POST /api/seed/all at start of pytest module, POST /api/seed/staff between mutation tests (wipes attendance only). Frontend test also hits /api/seed/staff. DB left in a seeded state after run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "STEP 4 is fully GREEN. selfie_url prefix is now '/api/uploads/attendance/' and the public ingress serves the PNG correctly. ClockOutModal is StrictMode-safe via useRef firedRef. If you re-test, run `pytest /app/backend/tests/test_step4_staff_attendance.py -v` and the /absen E2E flow. Staff testids are lowercased names (staff-erfa/dedi/rina/budi/siti/agus). PIN inputs are pin-0..pin-3 (text fields, use page.fill). To capture clock-out request count, attach page.on('request') BEFORE clicking clock-out-btn and wait ~3-4s after clockout-modal appears so any potential StrictMode duplicate would have fired. Pre-existing lint warning (ambiguous var name 'l') in test_step3_prices_customers_b2b.py is not from this iteration.",
+  "rca of the issue": "Both iter_16 issues are resolved at the root: (a) StaticFiles is now mounted at '/api/uploads' in server.py and clock-in stores selfie_url with that prefix in routes/staff_attendance.py, so the K8s ingress (which only forwards /api/* to backend:8001) now reaches the FastAPI StaticFiles route; verified with a live GET against the public Cloudflare URL returning 200 + image/png + valid PNG signature. (b) ClockOutModal in AttendanceKiosk.jsx now uses `const firedRef = useRef(false); if (firedRef.current) return; firedRef.current = true;` at the top of its useEffect, so React 18 StrictMode's double-invoke in dev is short-circuited and the non-idempotent POST runs exactly once."
+}

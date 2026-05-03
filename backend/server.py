@@ -99,11 +99,12 @@ app.include_router(b2b_quotas_router, prefix="/api")
 app.include_router(staff_attendance_router, prefix="/api")
 app.include_router(seed_router, prefix="/api")
 
-# Static files for uploaded selfies etc. Served from /uploads/* publicly.
+# Static files for uploaded selfies etc. Mounted under /api/uploads so the
+# Kubernetes ingress (which only forwards /api/* to the backend) serves them.
 UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 (UPLOADS_DIR / "attendance").mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+app.mount("/api/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
