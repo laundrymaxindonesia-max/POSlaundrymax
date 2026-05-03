@@ -33,6 +33,7 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import HeaderNav from "@/components/HeaderNav";
+import { useAuth } from "@/lib/AuthContext";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -832,9 +833,12 @@ function B2BQuotaView() {
 export default function AdminDashboard() {
   const [activeView, setActiveView] = useState("overview");
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const { user, logout } = useAuth();
 
-  const handleLogout = () => {
-    toast.info("Logout (mock)", { description: "Auth flow belum aktif." });
+  const handleLogout = async () => {
+    await logout();
+    toast.success("Logout berhasil");
+    window.location.href = "/absen";
   };
 
   const renderView = () => {
@@ -933,14 +937,14 @@ export default function AdminDashboard() {
             </span>
             <span className="hidden sm:flex text-white/70 text-xs font-mono items-center gap-1.5">
               <Mail size={10} className="text-white/40" />
-              {ADMIN_EMAIL}
+              {user?.email || ADMIN_EMAIL}
             </span>
             <span className="sm:hidden text-white/60 text-[10px] font-mono">
-              theomahrizal@…
+              {(user?.email || ADMIN_EMAIL).split("@")[0]}@…
             </span>
           </div>
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FFD700] to-[#E6C200] flex items-center justify-center text-black font-heading font-extrabold text-sm shadow-[0_0_15px_rgba(255,215,0,0.4)]">
-            T
+            {(user?.name || "T").charAt(0).toUpperCase()}
           </div>
         </div>
       </header>

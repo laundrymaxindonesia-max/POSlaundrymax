@@ -7,23 +7,27 @@ import {
   LineChart,
   Fingerprint,
 } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
 
 const ITEMS = [
-  { to: "/", label: "Kasir", Icon: Store, testid: "nav-cashier" },
-  { to: "/production", label: "Produksi", Icon: Factory, testid: "nav-production" },
-  { to: "/courier", label: "Kurir", Icon: Truck, testid: "nav-courier" },
-  { to: "/dashboard", label: "Dashboard", Icon: LineChart, testid: "nav-dashboard" },
-  { to: "/absen", label: "Absensi", Icon: Fingerprint, testid: "nav-absen" },
-  { to: "/admin", label: "Admin", Icon: ShieldCheck, testid: "nav-admin" },
+  { to: "/", label: "Kasir", Icon: Store, testid: "nav-cashier", ownerOnly: false },
+  { to: "/production", label: "Produksi", Icon: Factory, testid: "nav-production", ownerOnly: false },
+  { to: "/courier", label: "Kurir", Icon: Truck, testid: "nav-courier", ownerOnly: false },
+  { to: "/dashboard", label: "Dashboard", Icon: LineChart, testid: "nav-dashboard", ownerOnly: true },
+  { to: "/absen", label: "Absensi", Icon: Fingerprint, testid: "nav-absen", ownerOnly: false },
+  { to: "/admin", label: "Admin", Icon: ShieldCheck, testid: "nav-admin", ownerOnly: true },
 ];
 
 export default function HeaderNav() {
+  const { user } = useAuth();
+  const visible = ITEMS.filter((i) => (i.ownerOnly ? !!user : true));
+
   return (
     <div
       className="glass rounded-full p-1 flex items-center gap-0.5"
       data-testid="header-nav"
     >
-      {ITEMS.map(({ to, label, Icon, testid }) => (
+      {visible.map(({ to, label, Icon, testid }) => (
         <NavLink
           key={to}
           to={to}

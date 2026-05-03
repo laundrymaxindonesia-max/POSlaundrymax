@@ -1,25 +1,77 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import POSScreen from "@/components/POSScreen";
 import ProductionScanner from "@/components/ProductionScanner";
 import CourierDashboard from "@/components/CourierDashboard";
 import AdminDashboard from "@/components/AdminDashboard";
 import PipelineDashboard from "@/components/PipelineDashboard";
 import AttendanceKiosk from "@/components/AttendanceKiosk";
+import AuthCallback from "@/components/auth/AuthCallback";
+import OwnerProtectedRoute from "@/components/auth/OwnerProtectedRoute";
+import StaffPinGate from "@/components/auth/StaffPinGate";
+import { AuthProvider } from "@/lib/AuthContext";
 import { Toaster } from "@/components/ui/sonner";
+
+// Intercept Emergent Auth callback (#session_id=...) BEFORE normal routing runs.
+function AppRouter() {
+  const location = useLocation();
+  if (location.hash && location.hash.includes("session_id=")) {
+    return <AuthCallback />;
+  }
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <StaffPinGate>
+            <POSScreen />
+          </StaffPinGate>
+        }
+      />
+      <Route
+        path="/production"
+        element={
+          <StaffPinGate>
+            <ProductionScanner />
+          </StaffPinGate>
+        }
+      />
+      <Route
+        path="/courier"
+        element={
+          <StaffPinGate>
+            <CourierDashboard />
+          </StaffPinGate>
+        }
+      />
+      <Route path="/absen" element={<AttendanceKiosk />} />
+      <Route
+        path="/dashboard"
+        element={
+          <OwnerProtectedRoute loginNextPath="/dashboard">
+            <PipelineDashboard />
+          </OwnerProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <OwnerProtectedRoute loginNextPath="/admin">
+            <AdminDashboard />
+          </OwnerProtectedRoute>
+        }
+      />
+    </Routes>
+  );
+}
 
 function App() {
   return (
     <div className="App grain">
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<POSScreen />} />
-          <Route path="/production" element={<ProductionScanner />} />
-          <Route path="/courier" element={<CourierDashboard />} />
-          <Route path="/dashboard" element={<PipelineDashboard />} />
-          <Route path="/absen" element={<AttendanceKiosk />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-        </Routes>
+        <AuthProvider>
+          <AppRouter />
+        </AuthProvider>
       </BrowserRouter>
       <Toaster
         position="top-center"

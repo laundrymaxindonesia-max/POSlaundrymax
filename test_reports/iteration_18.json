@@ -1,0 +1,43 @@
+{
+  "summary": "STEP 5 Auth & Role-Gated Routes — backend + frontend tested. Backend: 12/12 pytest cases GREEN (staff-pin 200/403/422 incl. non-digits, /auth/me 401 unauthenticated, /auth/session 401 with bogus session_id, owner+hacker session simulation via direct Mongo seed, /auth/me with cookie AND Bearer both 200, /auth/logout deletes Mongo session and subsequent /me returns 401). Frontend: 11/12 critical UI flows PASS — /absen public, /admin & /dashboard unauth show owner-login-page, Google login redirects correctly to https://auth.emergentagent.com/?redirect=<origin>%2Fadmin (verified via expect_navigation), Staff PIN gate appears on / /production /courier with all 4 inputs, correct PIN 1234 unlocks (sessionStorage staff_pin_ok=true, gate disappears, header-nav renders), unlocked sessionStorage flag honored across /production navigation, HeaderNav unauth shows 4 pills (no nav-admin/nav-dashboard), Owner cookie injection makes /admin show all 6 pills + admin-logout-button, /dashboard regression OK, logout flow clears cookie + redirects to /absen and re-shows owner-login-page on /admin. ONE minor frontend UX bug: wrong PIN shows error banner text 'HTTP 403' instead of the backend-provided 'PIN salah' — root cause in StaffPinGate.jsx where j.detail is not surfacing despite API returning {detail:'PIN salah'} correctly (curl-verified).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "StaffPinGate",
+        "issue": "Wrong PIN displays generic 'HTTP 403' instead of API-provided 'PIN salah' in [data-testid=\"staff-gate-error\"]. Backend returns {detail:'PIN salah'} (curl-verified). Suspect StrictMode double-invoke of auto-submit useEffect causes one fetch's res.json() to succeed (sets detail='PIN salah') and a second concurrent fetch's res.json() to either fail or be parsed before body is fully buffered, with the catch path falling back to `HTTP ${res.status}`. Functional gate behavior (stays up, inputs cleared, no leak) is correct — only the error string is wrong.",
+        "selector": "[data-testid=\"staff-gate-error\"]",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_step5_auth.py",
+    "/app/test_reports/pytest/iter18_step5_auth.xml"
+  ],
+  "action_items": [
+    "[LOW] In /app/frontend/src/components/auth/StaffPinGate.jsx tryUnlock(): guard against StrictMode double-invoke and/or fix the j.detail parsing fallback. Recommended fix: add a useRef inFlightRef guard at top of tryUnlock (similar to ClockOutModal pattern from iter_17) to prevent the second concurrent fetch. Also consider parsing the body once via res.text() then JSON.parse in a try/catch to make the fallback more resilient. Alternatively, read body BEFORE the (!res.ok) check failure path to guarantee the response stream is captured cleanly."
+  ],
+  "critical_code_review_comments": [
+    "Spec-permitted but worth flagging: /api/auth/me does NOT re-check the OWNER_EMAILS whitelist against the looked-up user. If a non-whitelisted email's session record exists in Mongo (e.g. via seed/manual insert), /me will return that user with 200. The whitelist is only enforced at /api/auth/session exchange time. This is acceptable per the request spec but is a defense-in-depth gap. Consider adding a whitelist check in /me to harden against direct DB tampering.",
+    "OwnerProtectedRoute does not re-validate user.email against OWNER_EMAILS on the frontend either. Anyone with a forged session_token whose backing user.email is non-whitelisted would be admitted by the frontend. Same root cause as above.",
+    "Auth cookie is configured with secure=True + samesite='none' + httpOnly=True — correct for the cross-site preview Cloudflare ingress. Verified that /auth/logout's response.delete_cookie() works in conjunction with Mongo session delete; the /me call after logout returns 401 as expected.",
+    "Recharts width(-1)/height(-1) console warnings on /admin and /dashboard come from PipelineDashboard's chart container before the layout settles — purely cosmetic, no functional impact.",
+    "AttendanceKiosk.jsx is 923 lines (carry-over from iter_17 review)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_step5_auth.py (new — 12 tests, all green)"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "92% (11/12 — 1 minor cosmetic error-text bug)"},
+  "test_credentials": "Owner whitelist email: theomahrizal@gmail.com (hardcoded in routes/auth.py). Staff PIN: 1234 (any seeded staff). For owner-authenticated UI tests, used Mongo direct-insert per /app/auth_testing.md Step 1 then page.context.add_cookies(session_token=...).",
+  "seed_data_creation": "POST /api/seed/all called once at module start. Owner+hacker test users injected into users + user_sessions collections via pymongo and cleaned up in a per-class autouse fixture. A separate frontend-test owner user (test-user-frontend-1777794426704 / test_session_frontend_1777794426704) was seeded for Playwright cookie injection — left in DB but harmless (just one extra user/session).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "STEP 5 backend is 100% green via /app/backend/tests/test_step5_auth.py — re-run with `pytest /app/backend/tests/test_step5_auth.py -v`. For owner-authenticated frontend tests, seed a user+session into Mongo then add the session_token cookie via page.context.add_cookies (domain='laundrymax-cashier.preview.emergentagent.com', path='/', httpOnly=True, secure=True, sameSite='None'). Google OAuth itself is NOT exercised end-to-end. The only outstanding issue is StaffPinGate showing 'HTTP 403' on wrong PIN instead of 'PIN salah'; functional behavior of the gate is otherwise correct. Don't re-test backend unless auth.py changes; main agent's StaffPinGate.jsx fix is self-testable by reloading /, sessionStorage.clear(), and entering 9999 — error banner should read 'PIN salah'.",
+  "rca of the issue": "PIN-wrong error-text mismatch RCA: Backend confirmed correct via `curl -X POST /api/auth/staff-pin -d '{\"pin_code\":\"9999\"}'` → HTTP 403 body `{\"detail\":\"PIN salah\"}` (Cloudflare passthrough, content-type application/json, content-length 22). Frontend StaffPinGate.jsx tryUnlock() reads `let detail = `HTTP ${res.status}`; try { const j = await res.json(); detail = j.detail || detail; } catch (e) {}` — should yield 'PIN salah'. The most likely culprit is React 18 StrictMode double-invoking the auto-submit useEffect, causing two concurrent POSTs whose Response bodies race; one of them (probably the second) fails res.json() and falls into the silent catch, leaving detail at the `HTTP ${res.status}` fallback, which then overwrites the first call's correct error via setError. Fix is to add an `inFlightRef` useRef guard at the top of tryUnlock (mirroring the ClockOutModal firedRef pattern landed in iter_17 for AttendanceKiosk.jsx). Alternative: drop the `if (submitting) return;` closure-stale check and rely solely on the ref. Reproduction steps: open https://laundrymax-cashier.preview.emergentagent.com/, sessionStorage.clear(), reload, type 9999 → observe banner reads 'HTTP 403' (expected 'PIN salah'). Mitigation: low priority — does not break auth, only the user-facing error string is generic instead of localized."
+}
