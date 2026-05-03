@@ -15,7 +15,7 @@ from typing import Dict, List
 
 from fastapi import APIRouter
 
-from db import b2b_quotas_col, customers_col, orders_col, prices_col
+from db import attendance_col, b2b_quotas_col, customers_col, orders_col, prices_col, staff_col
 from models import (
     B2BQuota,
     Customer,
@@ -24,6 +24,7 @@ from models import (
     OrderSource,
     PaymentStatus,
     Price,
+    Staff,
     STATUS_CHAIN,
 )
 from utils import serialize_for_mongo
@@ -199,6 +200,26 @@ async def _seed_b2b() -> Dict[str, int]:
     return {"inserted": len(docs)}
 
 
+# ---------------- STAFF ----------------
+_DEFAULT_STAFF = [
+    {"name": "Erfa", "role": "Kasir",    "display_role": "Kasir Outlet",     "pin_code": "1234"},
+    {"name": "Dedi", "role": "Produksi", "display_role": "Operator Cuci",    "pin_code": "1234"},
+    {"name": "Rina", "role": "Produksi", "display_role": "Operator Setrika", "pin_code": "1234"},
+    {"name": "Budi", "role": "Kurir",    "display_role": "Kurir Antareun",   "pin_code": "1234"},
+    {"name": "Siti", "role": "Produksi", "display_role": "Packing & QC",     "pin_code": "1234"},
+    {"name": "Agus", "role": "Produksi", "display_role": "Operator Kering",  "pin_code": "1234"},
+]
+
+
+async def _seed_staff() -> Dict[str, int]:
+    # Wipe staff AND any dangling attendance records that reference old ids
+    await staff_col.delete_many({})
+    await attendance_col.delete_many({})
+    docs = [serialize_for_mongo(Staff(**r).model_dump()) for r in _DEFAULT_STAFF]
+    await staff_col.insert_many(docs)
+    return {"inserted": len(docs)}
+
+
 # ---------------- HTTP endpoints ----------------
 @router.post("/orders")
 async def seed_orders_endpoint():
@@ -220,6 +241,11 @@ async def seed_b2b_endpoint():
     return await _seed_b2b()
 
 
+@router.post("/staff")
+async def seed_staff_endpoint():
+    return await _seed_staff()
+
+
 @router.post("/all")
 async def seed_all_endpoint():
     """Single-shot reset of the whole demo dataset."""
@@ -228,4 +254,5 @@ async def seed_all_endpoint():
         "prices": await _seed_prices(),
         "customers": await _seed_customers(),
         "b2b_quotas": await _seed_b2b(),
+        "staff": await _seed_staff(),
     }

@@ -11,7 +11,7 @@ from models.price import Price, PriceCreate, ServiceId
 from models.b2b_quota import (
     B2BQuota, B2BQuotaCreate, B2BQuotaUsageUpdate,
 )
-from models.staff import Staff, StaffCreate, StaffRole
+from models.staff import Staff, StaffCreate, StaffRole, StaffPublic
 from models.attendance import Attendance, AttendanceCreate, ShiftReport
 
 __all__ = [
@@ -20,6 +20,6 @@ __all__ = [
     "Customer", "CustomerCreate", "CustomerType", "MemberTier", "QuotaDeduction",
     "Price", "PriceCreate", "ServiceId",
     "B2BQuota", "B2BQuotaCreate", "B2BQuotaUsageUpdate",
-    "Staff", "StaffCreate", "StaffRole",
+    "Staff", "StaffCreate", "StaffRole", "StaffPublic",
     "Attendance", "AttendanceCreate", "ShiftReport",
 ]

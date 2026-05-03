@@ -22,40 +22,73 @@ import {
 import { toast } from "sonner";
 import HeaderNav from "@/components/HeaderNav";
 
-const STAFF = [
-  { id: "erfa", name: "Erfa", role: "Kasir Outlet", initial: "E" },
-  { id: "dedi", name: "Dedi", role: "Operator Cuci", initial: "D" },
-  { id: "rina", name: "Rina", role: "Operator Setrika", initial: "R" },
-  { id: "budi", name: "Budi", role: "Kurir Antareun", initial: "B" },
-  { id: "siti", name: "Siti", role: "Packing & QC", initial: "S" },
-  { id: "agus", name: "Agus", role: "Operator Kering", initial: "A" },
-];
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-const SHIFT_REPORT = {
-  jamMasuk: "07:14",
-  jamPulang: "16:15",
-  stats: [
-    { id: "cuci", label: "Cuci", kg: 35, pelanggan: 9, Icon: Droplets, color: "#3DA5FF" },
-    { id: "kering", label: "Kering", kg: 45, pelanggan: 10, Icon: Wind, color: "#9EDDFF" },
-    { id: "setrika", label: "Setrika", kg: 80, pelanggan: 28, Icon: Shirt, color: "#FFD700" },
-    { id: "packing", label: "Packing", kg: 77, pelanggan: 25, Icon: PackageCheck, color: "#E0BBFF" },
-    { id: "pickup", label: "Pickup", kg: 15, pelanggan: 5, Icon: Bike, color: "#7DF08F" },
-    { id: "delivery", label: "Delivery", kg: 10, pelanggan: 2, Icon: Truck, color: "#FF8A3D" },
-  ],
-};
+// Shift-report UI metadata (icons/colors/labels) keyed by backend field names.
+const SHIFT_META = [
+  { id: "cuci",     label: "Cuci",     kgKey: "cuci_kg",     countKey: "cuci_pelanggan",     Icon: Droplets,     color: "#3DA5FF" },
+  { id: "kering",   label: "Kering",   kgKey: "kering_kg",   countKey: "kering_pelanggan",   Icon: Wind,         color: "#9EDDFF" },
+  { id: "setrika",  label: "Setrika",  kgKey: "setrika_kg",  countKey: "setrika_pelanggan",  Icon: Shirt,        color: "#FFD700" },
+  { id: "packing",  label: "Packing",  kgKey: "packing_kg",  countKey: "packing_pelanggan",  Icon: PackageCheck, color: "#E0BBFF" },
+  { id: "pickup",   label: "Pickup",   kgKey: "pickup_kg",   countKey: "pickup_pelanggan",   Icon: Bike,         color: "#7DF08F" },
+  { id: "delivery", label: "Delivery", kgKey: "delivery_kg", countKey: "delivery_pelanggan", Icon: Truck,        color: "#FF8A3D" },
+];
 
 const OWNER_WA = "628123456789";
 
-function buildShiftMessage(staffName) {
+function formatTimeID(iso) {
+  if (!iso) return "--:--";
+  try {
+    return new Date(iso).toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  } catch (e) {
+    return "--:--";
+  }
+}
+
+function buildShiftMessage(staffName, attendance) {
+  const sr = attendance?.shift_report_data || {};
+  const jamMasuk = formatTimeID(attendance?.clock_in_time);
+  const jamPulang = formatTimeID(attendance?.clock_out_time);
   return (
     `Selamat sore pak, izin ${staffName} laporan shift hari ini: ` +
-    `telah menyelesaikan pencucian 35kg (9 pelanggan), ` +
-    `pengeringan 45 kg (10 pelanggan), ` +
-    `setrika 80 kg (28 pelanggan), ` +
-    `packing 77 kg (25 pelanggan), ` +
-    `Pickup laundry 15 kg (5 pelanggan), ` +
-    `delivery laundry 10 kg (2 pelanggan). ` +
-    `Jam masuk: 07:14, Jam pulang: 16:15.`
+    `telah menyelesaikan pencucian ${sr.cuci_kg || 0}kg (${sr.cuci_pelanggan || 0} pelanggan), ` +
+    `pengeringan ${sr.kering_kg || 0} kg (${sr.kering_pelanggan || 0} pelanggan), ` +
+    `setrika ${sr.setrika_kg || 0} kg (${sr.setrika_pelanggan || 0} pelanggan), ` +
+    `packing ${sr.packing_kg || 0} kg (${sr.packing_pelanggan || 0} pelanggan), ` +
+    `Pickup laundry ${sr.pickup_kg || 0} kg (${sr.pickup_pelanggan || 0} pelanggan), ` +
+    `delivery laundry ${sr.delivery_kg || 0} kg (${sr.delivery_pelanggan || 0} pelanggan). ` +
+    `Jam masuk: ${jamMasuk}, Jam pulang: ${jamPulang}.`
+  );
+}
+
+async function generateMockSelfieBlob() {
+  // Render a simple 240x240 canvas as the "selfie" — good enough for a
+  // prototype + proves the multipart upload pipeline works end-to-end.
+  const canvas = document.createElement("canvas");
+  canvas.width = 240;
+  canvas.height = 240;
+  const ctx = canvas.getContext("2d");
+  const grad = ctx.createLinearGradient(0, 0, 240, 240);
+  grad.addColorStop(0, "#222");
+  grad.addColorStop(1, "#0a0a0a");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 240, 240);
+  ctx.fillStyle = "#FFD700";
+  ctx.beginPath();
+  ctx.arc(120, 95, 42, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(120, 220, 80, Math.PI, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.6)";
+  ctx.font = "bold 14px sans-serif";
+  ctx.fillText(new Date().toISOString().slice(0, 19), 10, 228);
+  return await new Promise((res) =>
+    canvas.toBlob((b) => res(b), "image/png")
   );
 }
 
@@ -77,6 +110,9 @@ function formatDate(date) {
 }
 
 export default function AttendanceKiosk() {
+  const [staff, setStaff] = useState([]);
+  const [staffLoading, setStaffLoading] = useState(true);
+  const [staffError, setStaffError] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [pin, setPin] = useState(["", "", "", ""]);
   const [now, setNow] = useState(new Date());
@@ -88,10 +124,46 @@ export default function AttendanceKiosk() {
     return () => clearInterval(t);
   }, []);
 
+  const loadStaff = async () => {
+    setStaffLoading(true);
+    setStaffError(null);
+    try {
+      let res = await fetch(`${API}/staff`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      let data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) {
+        // Auto-seed so the kiosk is never blank on a fresh DB
+        const seed = await fetch(`${API}/seed/staff`, { method: "POST" });
+        if (seed.ok) {
+          res = await fetch(`${API}/staff`);
+          data = await res.json();
+        }
+      }
+      setStaff(
+        (data || []).map((s) => ({
+          id: s.id,
+          name: s.name,
+          role: s.display_role || s.role,
+          initial: (s.name || "?").charAt(0).toUpperCase(),
+        }))
+      );
+    } catch (e) {
+      console.error(e);
+      setStaffError(e.message || "Gagal memuat staff");
+    } finally {
+      setStaffLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStaff();
+  }, []);
+
   const selected = useMemo(
-    () => STAFF.find((s) => s.id === selectedId) || null,
-    [selectedId]
+    () => staff.find((s) => s.id === selectedId) || null,
+    [staff, selectedId]
   );
+  const pinValue = pin.join("");
   const pinComplete = pin.every((d) => d.length === 1);
   const ready = selected && pinComplete;
 
@@ -218,12 +290,30 @@ export default function AttendanceKiosk() {
             className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5"
             data-testid="staff-grid"
           >
-            {STAFF.map((s) => {
+            {staffLoading && (
+              <div
+                className="col-span-2 sm:col-span-3 md:col-span-6 glass rounded-2xl p-6 flex items-center justify-center gap-2 text-white/50 text-sm"
+                data-testid="staff-loading"
+              >
+                <Loader2 size={16} className="animate-spin text-[#FFD700]" />{" "}
+                Memuat staff...
+              </div>
+            )}
+            {staffError && !staffLoading && (
+              <div
+                className="col-span-2 sm:col-span-3 md:col-span-6 glass rounded-2xl p-4 border border-red-500/40 bg-red-500/5 text-red-300 text-sm"
+                data-testid="staff-error"
+              >
+                {staffError}. Periksa backend, lalu klik ulang halaman ini.
+              </div>
+            )}
+            {!staffLoading &&
+              staff.map((s) => {
               const active = selectedId === s.id;
               return (
                 <button
                   key={s.id}
-                  data-testid={`staff-${s.id}`}
+                  data-testid={`staff-${s.name.toLowerCase()}`}
                   onClick={() => setSelectedId(s.id)}
                   className={`group rounded-2xl p-3.5 text-left border transition-all active:scale-[0.97] ${
                     active
@@ -393,13 +483,15 @@ export default function AttendanceKiosk() {
 
       {clockInOpen && (
         <ClockInModal
+          staffId={selected?.id}
           staffName={selected?.name || ""}
+          pinCode={pinValue}
           onClose={() => setClockInOpen(false)}
-          onSuccess={() => {
+          onSuccess={(attendance) => {
             setClockInOpen(false);
             toast.success(
-              `${selected?.name} berhasil absen masuk · ${formatClock(
-                new Date()
+              `${selected?.name} berhasil absen masuk · ${formatTimeID(
+                attendance.clock_in_time
               )}`
             );
             resetKiosk();
@@ -409,7 +501,9 @@ export default function AttendanceKiosk() {
 
       {clockOutOpen && (
         <ClockOutModal
+          staffId={selected?.id}
           staffName={selected?.name || ""}
+          pinCode={pinValue}
           onClose={() => setClockOutOpen(false)}
           onConfirm={() => {
             setClockOutOpen(false);
@@ -425,7 +519,7 @@ export default function AttendanceKiosk() {
 }
 
 /* ---------------- CLOCK-IN MODAL ---------------- */
-function ClockInModal({ staffName, onClose, onSuccess }) {
+function ClockInModal({ staffId, staffName, pinCode, onClose, onSuccess }) {
   const [uploading, setUploading] = useState(false);
   const [captured, setCaptured] = useState(false);
   const [now, setNow] = useState(new Date());
@@ -435,14 +529,37 @@ function ClockInModal({ staffName, onClose, onSuccess }) {
     return () => clearInterval(t);
   }, []);
 
-  const capture = () => {
+  const capture = async () => {
     if (uploading || captured) return;
     setUploading(true);
-    setTimeout(() => {
-      setUploading(false);
+    try {
+      const blob = await generateMockSelfieBlob();
+      const fd = new FormData();
+      fd.append("staff_id", staffId || "");
+      fd.append("pin_code", pinCode || "");
+      fd.append("lat", "-6.929");
+      fd.append("lng", "107.774");
+      fd.append("selfie", blob, "selfie.png");
+      const res = await fetch(`${API}/attendance/clock-in`, {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const j = await res.json();
+          detail = j.detail || detail;
+        } catch (e) { /* ignore */ }
+        throw new Error(detail);
+      }
+      const attendance = await res.json();
       setCaptured(true);
-      setTimeout(() => onSuccess(), 700);
-    }, 1000);
+      setTimeout(() => onSuccess(attendance), 700);
+    } catch (e) {
+      toast.error(e.message || "Gagal absen masuk");
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -574,20 +691,55 @@ function ClockInModal({ staffName, onClose, onSuccess }) {
 }
 
 /* ---------------- CLOCK-OUT MODAL ---------------- */
-function ClockOutModal({ staffName, onClose, onConfirm }) {
+function ClockOutModal({ staffId, staffName, pinCode, onClose, onConfirm }) {
+  const [loading, setLoading] = useState(true);
+  const [attendance, setAttendance] = useState(null);
+  const [error, setError] = useState(null);
   const [reportSent, setReportSent] = useState(false);
 
+  useEffect(() => {
+    const run = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`${API}/attendance/clock-out`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ staff_id: staffId, pin_code: pinCode }),
+        });
+        if (!res.ok) {
+          let detail = `HTTP ${res.status}`;
+          try {
+            const j = await res.json();
+            detail = j.detail || detail;
+          } catch (e) { /* ignore */ }
+          throw new Error(detail);
+        }
+        const data = await res.json();
+        setAttendance(data);
+      } catch (e) {
+        setError(e.message || "Gagal absen pulang");
+      } finally {
+        setLoading(false);
+      }
+    };
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const sendReport = () => {
-    const msg = buildShiftMessage(staffName);
+    if (!attendance) return;
+    const msg = buildShiftMessage(staffName, attendance);
     const url = `https://wa.me/${OWNER_WA}?text=${encodeURIComponent(msg)}`;
     window.open(url, "_blank", "noopener,noreferrer");
     setReportSent(true);
     setTimeout(() => onConfirm(), 900);
   };
 
-  const totalKg = SHIFT_REPORT.stats.reduce((a, s) => a + s.kg, 0);
-  const totalPelanggan = SHIFT_REPORT.stats.reduce(
-    (a, s) => a + s.pelanggan,
+  const sr = attendance?.shift_report_data || {};
+  const totalKg = SHIFT_META.reduce((a, m) => a + (sr[m.kgKey] || 0), 0);
+  const totalPelanggan = SHIFT_META.reduce(
+    (a, m) => a + (sr[m.countKey] || 0),
     0
   );
 
@@ -597,7 +749,6 @@ function ClockOutModal({ staffName, onClose, onConfirm }) {
       data-testid="clockout-modal"
     >
       <div className="w-full md:max-w-xl glass-strong border border-white/10 rounded-t-3xl md:rounded-3xl overflow-hidden animate-fade-up max-h-[92vh] flex flex-col">
-        {/* Header */}
         <div className="p-5 flex items-center justify-between border-b border-white/10">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-red-400 flex items-center justify-center shadow-[0_0_18px_rgba(248,113,113,0.5)]">
@@ -622,104 +773,128 @@ function ClockOutModal({ staffName, onClose, onConfirm }) {
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto no-scrollbar">
-          {/* Shift times */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-emerald-400/25 bg-emerald-400/5 p-4">
-              <div className="text-emerald-300/80 text-[10px] uppercase tracking-widest font-semibold flex items-center gap-1.5">
-                <Clock size={12} /> Jam Masuk
-              </div>
-              <div className="font-heading font-black text-emerald-300 text-3xl tabular-nums mt-1">
-                {SHIFT_REPORT.jamMasuk}
-              </div>
-            </div>
-            <div className="rounded-2xl border border-red-400/25 bg-red-400/5 p-4">
-              <div className="text-red-300/80 text-[10px] uppercase tracking-widest font-semibold flex items-center gap-1.5">
-                <Clock size={12} /> Jam Pulang
-              </div>
-              <div className="font-heading font-black text-red-300 text-3xl tabular-nums mt-1">
-                {SHIFT_REPORT.jamPulang}
-              </div>
-            </div>
-          </div>
-
-          {/* Stats grid */}
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="font-heading font-extrabold text-white text-sm tracking-tight">
-                Performa Hari Ini
-              </div>
-              <div className="text-[10px] uppercase tracking-widest text-white/40">
-                {totalKg} kg · {totalPelanggan} Pelanggan
-              </div>
-            </div>
+          {loading && (
             <div
-              className="grid grid-cols-2 gap-2.5"
-              data-testid="shift-stats"
+              data-testid="clockout-loading"
+              className="glass rounded-2xl p-6 flex items-center justify-center gap-2 text-white/60 text-sm"
             >
-              {SHIFT_REPORT.stats.map((s) => {
-                const { Icon } = s;
-                return (
-                  <div
-                    key={s.id}
-                    data-testid={`stat-${s.id}`}
-                    className="rounded-xl border border-white/10 bg-black/40 p-3 flex items-center gap-3"
-                  >
-                    <div
-                      className="w-9 h-9 rounded-lg border flex items-center justify-center"
-                      style={{
-                        backgroundColor: `${s.color}18`,
-                        borderColor: `${s.color}40`,
-                      }}
-                    >
-                      <Icon size={16} style={{ color: s.color }} strokeWidth={2.25} />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">
-                        {s.label}
-                      </div>
-                      <div
-                        className="font-heading font-black text-white text-lg leading-none tracking-tight mt-0.5"
-                        style={{ color: s.color }}
-                      >
-                        {s.kg} kg
-                      </div>
-                      <div className="text-white/50 text-[11px] mt-0.5">
-                        {s.pelanggan} pelanggan
-                      </div>
-                    </div>
+              <Loader2 size={16} className="animate-spin text-[#FFD700]" />
+              Merekam absen pulang...
+            </div>
+          )}
+
+          {error && !loading && (
+            <div
+              data-testid="clockout-error"
+              className="glass rounded-2xl p-4 border border-red-500/40 bg-red-500/5 text-red-300 text-sm"
+            >
+              {error}
+            </div>
+          )}
+
+          {!loading && attendance && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-emerald-400/25 bg-emerald-400/5 p-4">
+                  <div className="text-emerald-300/80 text-[10px] uppercase tracking-widest font-semibold flex items-center gap-1.5">
+                    <Clock size={12} /> Jam Masuk
                   </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Preview message */}
-          <div className="rounded-2xl border border-[#FFD700]/20 bg-[#FFD700]/[0.04] p-3.5">
-            <div className="flex items-center gap-2 mb-1.5">
-              <MessageCircle size={14} className="text-[#FFD700]" />
-              <div className="text-[10px] uppercase tracking-widest text-[#FFD700] font-bold">
-                Preview Laporan WA
+                  <div
+                    data-testid="jam-masuk"
+                    className="font-heading font-black text-emerald-300 text-3xl tabular-nums mt-1"
+                  >
+                    {formatTimeID(attendance.clock_in_time)}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-red-400/25 bg-red-400/5 p-4">
+                  <div className="text-red-300/80 text-[10px] uppercase tracking-widest font-semibold flex items-center gap-1.5">
+                    <Clock size={12} /> Jam Pulang
+                  </div>
+                  <div
+                    data-testid="jam-pulang"
+                    className="font-heading font-black text-red-300 text-3xl tabular-nums mt-1"
+                  >
+                    {formatTimeID(attendance.clock_out_time)}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div
-              className="text-white/75 text-[12px] leading-relaxed"
-              data-testid="wa-preview"
-            >
-              {buildShiftMessage(staffName)}
-            </div>
-          </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="font-heading font-extrabold text-white text-sm tracking-tight">
+                    Performa Hari Ini
+                  </div>
+                  <div className="text-[10px] uppercase tracking-widest text-white/40">
+                    {totalKg} kg · {totalPelanggan} Pelanggan
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5" data-testid="shift-stats">
+                  {SHIFT_META.map((m) => {
+                    const { Icon } = m;
+                    const kg = sr[m.kgKey] || 0;
+                    const pelanggan = sr[m.countKey] || 0;
+                    return (
+                      <div
+                        key={m.id}
+                        data-testid={`stat-${m.id}`}
+                        className="rounded-xl border border-white/10 bg-black/40 p-3 flex items-center gap-3"
+                      >
+                        <div
+                          className="w-9 h-9 rounded-lg border flex items-center justify-center"
+                          style={{
+                            backgroundColor: `${m.color}18`,
+                            borderColor: `${m.color}40`,
+                          }}
+                        >
+                          <Icon size={16} style={{ color: m.color }} strokeWidth={2.25} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[10px] uppercase tracking-widest text-white/40 font-semibold">
+                            {m.label}
+                          </div>
+                          <div
+                            className="font-heading font-black text-white text-lg leading-none tracking-tight mt-0.5"
+                            style={{ color: m.color }}
+                          >
+                            {kg} kg
+                          </div>
+                          <div className="text-white/50 text-[11px] mt-0.5">
+                            {pelanggan} pelanggan
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[#FFD700]/20 bg-[#FFD700]/[0.04] p-3.5">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <MessageCircle size={14} className="text-[#FFD700]" />
+                  <div className="text-[10px] uppercase tracking-widest text-[#FFD700] font-bold">
+                    Preview Laporan WA
+                  </div>
+                </div>
+                <div
+                  className="text-white/75 text-[12px] leading-relaxed"
+                  data-testid="wa-preview"
+                >
+                  {buildShiftMessage(staffName, attendance)}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* CTA */}
         <div className="p-5 border-t border-white/10 bg-black/40">
           <button
             data-testid="send-wa-report-btn"
             onClick={sendReport}
-            disabled={reportSent}
+            disabled={reportSent || loading || !!error || !attendance}
             className={`w-full h-14 rounded-2xl font-heading font-black text-base tracking-tight transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${
               reportSent
                 ? "bg-emerald-400 text-black"
-                : "bg-[#25D366] text-black hover:shadow-[0_0_30px_rgba(37,211,102,0.5)]"
+                : "bg-[#25D366] text-black hover:shadow-[0_0_30px_rgba(37,211,102,0.5)] disabled:opacity-40 disabled:cursor-not-allowed"
             }`}
           >
             {reportSent ? (

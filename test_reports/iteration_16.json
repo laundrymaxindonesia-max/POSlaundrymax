@@ -1,0 +1,41 @@
+{
+  "summary": "STEP 4 Staff + Attendance + Selfie upload fully tested. 15/15 pytest cases pass (staff list, seed, clock-in happy/wrong-PIN/duplicate/415/422, clock-out 403/400/happy with exact shift-report values, attendance list filters, regressions). Frontend /absen E2E: 6 staff buttons render from live API (staff-erfa..staff-agus), clock-in with canvas selfie posts multipart to backend and persists (GET /api/attendance returns record w/ selfie_url starting /uploads/attendance/), clock-out modal auto-fires API and renders jam-masuk, jam-pulang, all 6 stat cards (cuci 35/9, kering 45/10, setrika 80/28, packing 77/25, pickup 15/5, delivery 10/2), wa-preview contains the exact Indonesian template, KIRIM LAPORAN triggers window.open with wa.me/628123456789. Wrong-PIN and no-prior-clock-in error paths both surface backend errors (PIN salah; Belum ada absen masuk...) and keep kiosk state as expected. /,/production,/courier,/dashboard,/admin all still load.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /uploads/attendance/<file>", "issue": "Kubernetes ingress routes only /api/* to backend; all other paths (including /uploads/*) go to the React frontend and return the SPA HTML shell (HTTP 200, content-type text/html). FastAPI StaticFiles mount works on localhost:8001 but the public selfie_url stored in Mongo is unreachable externally. Frontend/ops work gracefully because no consumer renders selfie_url yet, but any future <img src={selfie_url}> will 404/render SPA."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "ClockOutModal", "issue": "useEffect fires the clock-out POST twice in React StrictMode dev mount. First call returns 200 (Rekap populates). The second call returns HTTP 400 (no open attendance anymore) and sets the error state, so the modal briefly shows both the 'HTTP 400' red error banner AND the Rekap/shift-stats/wa-preview (see screenshot). Functionally WA send still works. Fix: guard the effect with a useRef flag or AbortController so the non-idempotent POST only fires once.", "affected_selectors": ["[data-testid=\"clockout-error\"]", "[data-testid=\"clockout-modal\"]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_step4_staff_attendance.py",
+    "/app/test_reports/pytest/iter16_step4.xml"
+  ],
+  "action_items": [
+    "Mount selfie static files under a path the ingress actually forwards to the backend (e.g. /api/uploads) OR add an ingress rule for /uploads → backend:8001, otherwise any future image preview in the Rekap / admin dashboards will break.",
+    "Guard ClockOutModal useEffect against React StrictMode double-invocation so the non-idempotent POST /api/attendance/clock-out runs exactly once — currently the duplicate call produces a spurious HTTP 400 error banner that is rendered alongside a successful Rekap."
+  ],
+  "critical_code_review_comments": [
+    "routes/staff_attendance.py:_load_and_verify_staff leaks a 'Staff not found' 404 before PIN check — acceptable but note that staff-id enumeration via differing 404/403 responses is technically a minor infosec observation.",
+    "Attendance doc writes staff_id as an out-of-model field (models/attendance.py has no staff_id). This works because ConfigDict(extra='ignore'), but means /api/attendance responses do NOT include staff_id — callers can't tell which staff a record belongs to without the staff_name join. Consider adding staff_id to the Attendance pydantic model.",
+    "AttendanceKiosk.jsx ClockOutModal performs the API call inside a useEffect with [] deps + eslint-disable — will double-fire in StrictMode. See integration_issues above.",
+    "No cleanup job for /app/backend/uploads/attendance/* — file will grow unbounded. Add a TTL or a cron cleanup for >30-day-old selfies.",
+    "AttendanceKiosk.jsx is 918 lines — borderline of the 700-line guideline; split ClockInModal and ClockOutModal into their own files."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_step4_staff_attendance.py (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "95% — all required flows work; only integration_issue is the React StrictMode duplicate clock-out call"},
+  "test_credentials": "Default staff PIN for all 6 seeded staff is 1234. No auth tokens needed; kiosk is open.",
+  "seed_data_creation": "POST /api/seed/all at start of pytest module, POST /api/seed/staff between mutation tests (wipes attendance only). Frontend test also hits /api/seed/all + /api/seed/staff. DB left in a seeded state with one open+closed attendance cycle for Erfa.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "STEP 4 backend is 100% green. Known issues for main agent to fix: (1) /uploads is not ingress-exposed, (2) ClockOutModal double-fires the POST due to StrictMode. When re-testing after fix, run `pytest /app/backend/tests/test_step4_staff_attendance.py -v` and the /absen E2E flow. Staff testids are lowercased names (staff-erfa/dedi/rina/budi/siti/agus). Backend /api/attendance record does NOT echo staff_id back (by design of the Attendance model); filter uses staff_id query param instead.",
+  "rca of the issue": "Selfie URL ingress gap — Kubernetes ingress config only forwards '/api/*' to backend:8001; all other paths go to frontend:3000 which returns the SPA index.html with 200 for any unknown path, so /uploads/attendance/<file>.png hits the React app instead of FastAPI StaticFiles. Fix options: (a) remount StaticFiles under /api/uploads in server.py (simplest, zero infra change) and have clock-in return that prefix; (b) add ingress route for /uploads. Duplicate clock-out POST — React 18 StrictMode mounts components twice in dev; the useEffect with [] deps re-runs and calls fetch a second time; the second call sees no open attendance and returns 400, populating the error state on top of attendance state, causing a simultaneous error banner + Rekap render. Fix: add `const didRun = useRef(false); if (didRun.current) return; didRun.current = true;` at the top of the effect."
+}

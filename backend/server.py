@@ -8,9 +8,11 @@ will land in /app/backend/routes/ in subsequent backend steps.
 import logging
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, FastAPI
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.cors import CORSMiddleware
 
@@ -27,6 +29,7 @@ from routes.orders import router as orders_router
 from routes.prices import router as prices_router
 from routes.customers import router as customers_router
 from routes.b2b_quotas import router as b2b_quotas_router
+from routes.staff_attendance import router as staff_attendance_router
 from routes.seed import router as seed_router
 
 
@@ -93,7 +96,14 @@ app.include_router(orders_router, prefix="/api")
 app.include_router(prices_router, prefix="/api")
 app.include_router(customers_router, prefix="/api")
 app.include_router(b2b_quotas_router, prefix="/api")
+app.include_router(staff_attendance_router, prefix="/api")
 app.include_router(seed_router, prefix="/api")
+
+# Static files for uploaded selfies etc. Served from /uploads/* publicly.
+UPLOADS_DIR = Path(__file__).resolve().parent / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+(UPLOADS_DIR / "attendance").mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
