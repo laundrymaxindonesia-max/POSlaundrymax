@@ -84,15 +84,15 @@ Desktop sidebar layout (mobile drawer via burger menu) with mock auth badge "Sup
 ## Backlog
 ### Backend roadmap (in progress)
 - ✅ **STEP 1** (iter_13) — FastAPI boilerplate + 6 Pydantic models + Mongo connection + /api/health.
-- ✅ **STEP 2** (iter_14) — Order model gains `order_events[]`. POST/GET/GET-by-id/PATCH orders + POST /api/seed/orders. `/dashboard` wired live.
-- ✅ **STEP 3** (iter_15) — Prices, Customers, B2B Quotas CRUD + Seed expansion + Admin Pricing UI wired.
-  - Price model refactored to grouped shape (service_id, label, unit, tamel/laskita/member) — one row per service, matches UI 1:1.
-  - `POST /api/prices/bulk` atomically replaces the grid; auto-seeds `/api/seed/prices` on empty load.
-  - `GET/POST /api/customers` with case-insensitive regex-escaped search (name/phone), `GET /api/customers/{id}`, `PATCH /api/customers/{id}/deduct` with Member-only + quota validation.
-  - `GET /api/b2b_quotas` + `PATCH /api/b2b_quotas/{partner_id}/usage` with delta_kg (validates 0 ≤ used ≤ total).
-  - `POST /api/seed/{orders,prices,customers,b2b,all}` endpoints. `/api/seed/all` seeds 35 orders + 6 prices + 5 customers + 4 partners.
-  - 100% tests pass (21 backend + full frontend) iter_15.
-- **STEP 4** — Staff + Attendance CRUD, wire /absen clock-in/out + selfie upload.
+- ✅ **STEP 2** (iter_14) — Orders CRUD + event audit log + Pipeline Dashboard wired.
+- ✅ **STEP 3** (iter_15) — Prices, Customers, B2B Quotas CRUD + Admin Pricing UI wired.
+- ✅ **STEP 4** (iter_16 + iter_17 fixes) — Staff + Attendance CRUD with multipart selfie uploads; HR Kiosk wired.
+  - StaticFiles mount at `/api/uploads` (routed through K8s ingress). Selfies saved to `/app/backend/uploads/attendance/`.
+  - `GET /api/staff` returns public shape (no PIN leaked).
+  - `POST /api/attendance/clock-in` — multipart (staff_id, pin_code, lat, lng, selfie). Validates PIN (403), rejects duplicate open sessions (409), validates image type (415) + size (5 MB cap).
+  - `POST /api/attendance/clock-out` — JSON; finds open attendance for staff, writes clock_out_time + deterministic shift_report_data (matches UI template).
+  - `POST /api/seed/staff` (6 default staff all PIN 1234); `/api/seed/all` now seeds 5 collections.
+  - Frontend `AttendanceKiosk.jsx`: staff list loaded from API (auto-seeds on empty), canvas-generated mock selfie uploaded via FormData, clock-out modal auto-fires API on open (StrictMode-guarded via useRef), WA message built dynamically from backend shift_report. Tests 100% green (iter_17).
 - **STEP 5** — Real auth (JWT or Emergent Google) with role-gated routes.
 - **STEP 6** — Wire POS/Courier/Production to real APIs, drop all mock data.
 
