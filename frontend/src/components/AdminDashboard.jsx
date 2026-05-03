@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Tags,
@@ -19,6 +19,8 @@ import {
   Mail,
   MessageCircle,
   AlertCircle,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import {
   BarChart,
@@ -31,6 +33,8 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import HeaderNav from "@/components/HeaderNav";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const ADMIN_EMAIL = "theomahrizal@gmail.com";
 
@@ -387,7 +391,58 @@ function OverviewView() {
 }
 
 function PricingView() {
-  const [prices, setPrices] = useState(INITIAL_PRICES);
+  const [prices, setPrices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const loadPrices = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API}/prices`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      let data = await res.json();
+      // Auto-seed on empty DB so the Admin UI is never blank
+      if (!Array.isArray(data) || data.length === 0) {
+        const seedRes = await fetch(`${API}/seed/prices`, { method: "POST" });
+        if (seedRes.ok) {
+          const refetch = await fetch(`${API}/prices`);
+          data = await refetch.json();
+        } else {
+          data = INITIAL_PRICES;
+        }
+      }
+      // Sort by canonical service order so UI stays stable
+      const order = INITIAL_PRICES.map((p) => p.id);
+      data.sort(
+        (a, b) =>
+          order.indexOf(a.service_id) - order.indexOf(b.service_id)
+      );
+      // Normalise to UI shape: use service_id as id for React key + testids
+      setPrices(
+        data.map((p) => ({
+          id: p.service_id,
+          service_id: p.service_id,
+          label: p.label,
+          unit: p.unit,
+          tamel: p.tamel,
+          laskita: p.laskita,
+          member: p.member,
+        }))
+      );
+    } catch (e) {
+      console.error(e);
+      setError(e.message || "Gagal memuat harga");
+      setPrices(INITIAL_PRICES);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPrices();
+  }, []);
 
   const updatePrice = (id, tier, raw) => {
     const value = parseInt(raw.replace(/\D/g, ""), 10) || 0;
@@ -396,10 +451,32 @@ function PricingView() {
     );
   };
 
-  const handleSave = () => {
-    toast.success("Perubahan harga tersimpan", {
-      description: `${prices.length} kategori diperbarui untuk Tamel / Laskita / Kostunpad.`,
-    });
+  const handleSave = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const payload = prices.map((p) => ({
+        service_id: p.service_id || p.id,
+        label: p.label,
+        unit: p.unit,
+        tamel: p.tamel,
+        laskita: p.laskita,
+        member: p.member,
+      }));
+      const res = await fetch(`${API}/prices/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      toast.success("Perubahan harga tersimpan", {
+        description: `${prices.length} kategori diperbarui untuk Tamel / Laskita / Kostunpad.`,
+      });
+    } catch (e) {
+      toast.error("Gagal menyimpan harga", { description: e.message });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -417,11 +494,29 @@ function PricingView() {
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs">
+          <button
+            onClick={loadPrices}
+            disabled={loading}
+            data-testid="refresh-prices-btn"
+            className="h-9 w-9 rounded-full bg-white/5 border border-white/10 hover:border-[#FFD700]/40 text-white/60 hover:text-[#FFD700] flex items-center justify-center transition-colors disabled:opacity-40"
+            title="Muat ulang harga"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+          </button>
           <span className="px-2.5 py-1 rounded-full bg-[#FFD700]/15 border border-[#FFD700]/30 text-[#FFD700] font-heading font-bold uppercase tracking-widest">
             3 Tier Aktif
           </span>
         </div>
       </div>
+
+      {error && (
+        <div
+          data-testid="pricing-error-banner"
+          className="glass rounded-2xl border border-red-500/40 bg-red-500/5 p-3 text-sm text-red-300"
+        >
+          Gagal memuat data harga: {error}. Menampilkan nilai default.
+        </div>
+      )}
 
       {/* Desktop table */}
       <div
@@ -537,11 +632,20 @@ function PricingView() {
         </button>
         <button
           onClick={handleSave}
+          disabled={saving || loading}
           data-testid="save-pricing-button"
-          className="flex-1 md:flex-initial h-12 md:px-8 rounded-xl bg-[#FFD700] text-black font-heading font-extrabold text-sm tracking-wide flex items-center justify-center gap-2 hover:bg-[#ffdf33] transition-all active:scale-[0.97] shadow-[0_8px_30px_rgba(255,215,0,0.3)]"
+          className="flex-1 md:flex-initial h-12 md:px-8 rounded-xl bg-[#FFD700] text-black font-heading font-extrabold text-sm tracking-wide flex items-center justify-center gap-2 hover:bg-[#ffdf33] transition-all active:scale-[0.97] shadow-[0_8px_30px_rgba(255,215,0,0.3)] disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          <Save size={16} strokeWidth={2.5} />
-          SIMPAN PERUBAHAN HARGA
+          {saving ? (
+            <>
+              <Loader2 size={16} className="animate-spin" /> MENYIMPAN...
+            </>
+          ) : (
+            <>
+              <Save size={16} strokeWidth={2.5} />
+              SIMPAN PERUBAHAN HARGA
+            </>
+          )}
         </button>
       </div>
     </div>

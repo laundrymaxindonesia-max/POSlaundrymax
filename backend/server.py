@@ -24,6 +24,9 @@ import models  # noqa: F401
 
 # Domain routers
 from routes.orders import router as orders_router
+from routes.prices import router as prices_router
+from routes.customers import router as customers_router
+from routes.b2b_quotas import router as b2b_quotas_router
 from routes.seed import router as seed_router
 
 
@@ -87,6 +90,9 @@ async def get_status_checks():
 
 app.include_router(api_router)
 app.include_router(orders_router, prefix="/api")
+app.include_router(prices_router, prefix="/api")
+app.include_router(customers_router, prefix="/api")
+app.include_router(b2b_quotas_router, prefix="/api")
 app.include_router(seed_router, prefix="/api")
 
 app.add_middleware(

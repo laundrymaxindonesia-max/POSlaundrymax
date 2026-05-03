@@ -4,17 +4,15 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-
-PartnerName = Literal["Tamel", "Laskita", "Kosan"]
 
 
 class B2BQuotaBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    partner_name: PartnerName
+    partner_id: str = Field(..., min_length=1, description="Stable slug e.g. 'tamel'")
+    partner_name: str = Field(..., min_length=1, description="Display name")
     total_quota_kg: float = Field(..., gt=0)
     used_quota_kg: float = Field(default=0.0, ge=0)
     billing_period: str = Field(
@@ -23,7 +21,16 @@ class B2BQuotaBase(BaseModel):
 
 
 class B2BQuotaCreate(B2BQuotaBase):
-    """Payload accepted by POST /api/b2b/quotas."""
+    """Payload accepted by POST /api/b2b_quotas."""
+
+
+class B2BQuotaUsageUpdate(BaseModel):
+    """Body for PATCH /api/b2b_quotas/{partner_id}/usage.
+
+    Positive `delta_kg` adds to `used_quota_kg`; negative subtracts (e.g. refund).
+    """
+
+    delta_kg: float = Field(..., description="kg to add to used_quota_kg (can be negative)")
 
 
 class B2BQuota(B2BQuotaBase):

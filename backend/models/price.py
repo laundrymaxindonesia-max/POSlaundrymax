@@ -1,4 +1,8 @@
-"""Price model — multi-tier pricing matrix managed by Admin."""
+"""Price model — one row per service category with 3 tier prices.
+
+Shape matches the Admin "Pengaturan Harga" grid (6 service rows × 3 tier columns).
+This lets the frontend POST the whole grid as-is via POST /api/prices/bulk.
+"""
 
 from __future__ import annotations
 
@@ -8,20 +12,22 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-ServiceType = Literal["Kiloan", "Satuan"]
-PriceTier = Literal["Tamel", "Laskita", "Umum"]
+ServiceId = Literal["kiloan", "satuan", "jas", "sepatu", "karpet", "showcase"]
 
 
 class PriceBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    service_type: ServiceType
-    tier: PriceTier
-    price: int = Field(..., ge=0, description="IDR per kg (Kiloan) or per item (Satuan)")
+    service_id: ServiceId
+    label: str = Field(..., min_length=1)
+    unit: str = Field(..., min_length=1, description="e.g. '/kg', '/pcs', '/m²'")
+    tamel: int = Field(..., ge=0, description="Tamel tier price (IDR)")
+    laskita: int = Field(..., ge=0, description="Laskita tier price (IDR)")
+    member: int = Field(..., ge=0, description="Kostunpad/Member tier price (IDR)")
 
 
 class PriceCreate(PriceBase):
-    """Payload accepted by POST/PUT /api/prices."""
+    """Payload accepted by the bulk-replace endpoint."""
 
 
 class Price(PriceBase):
