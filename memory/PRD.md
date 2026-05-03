@@ -84,9 +84,15 @@ Desktop sidebar layout (mobile drawer via burger menu) with mock auth badge "Sup
 ## Backlog
 ### Backend roadmap (in progress)
 - ✅ **STEP 1** (iter_13) — FastAPI boilerplate + 6 Pydantic models + Mongo connection + /api/health.
-- ✅ **STEP 2** (iter_14) — Order model gains `order_events[]` audit log (status + timestamp + actor). POST/GET/GET-by-id/PATCH orders endpoints. POST /api/seed/orders → 35 deterministic orders across all 7 statuses. `/dashboard` frontend rewired to fetch live aggregates (KPIs + 7 stage cards + throughput chart) from `/api/orders?since=...`; seed-btn + refresh-btn added. 100% backend & frontend tests pass (iter_14).
-- **STEP 3** — Customers + Prices + B2B Quotas CRUD; wire Admin UI to live prices.
-- **STEP 4** — Staff + Attendance CRUD, wire /absen clock-in/out to real DB + file storage for selfies.
+- ✅ **STEP 2** (iter_14) — Order model gains `order_events[]`. POST/GET/GET-by-id/PATCH orders + POST /api/seed/orders. `/dashboard` wired live.
+- ✅ **STEP 3** (iter_15) — Prices, Customers, B2B Quotas CRUD + Seed expansion + Admin Pricing UI wired.
+  - Price model refactored to grouped shape (service_id, label, unit, tamel/laskita/member) — one row per service, matches UI 1:1.
+  - `POST /api/prices/bulk` atomically replaces the grid; auto-seeds `/api/seed/prices` on empty load.
+  - `GET/POST /api/customers` with case-insensitive regex-escaped search (name/phone), `GET /api/customers/{id}`, `PATCH /api/customers/{id}/deduct` with Member-only + quota validation.
+  - `GET /api/b2b_quotas` + `PATCH /api/b2b_quotas/{partner_id}/usage` with delta_kg (validates 0 ≤ used ≤ total).
+  - `POST /api/seed/{orders,prices,customers,b2b,all}` endpoints. `/api/seed/all` seeds 35 orders + 6 prices + 5 customers + 4 partners.
+  - 100% tests pass (21 backend + full frontend) iter_15.
+- **STEP 4** — Staff + Attendance CRUD, wire /absen clock-in/out + selfie upload.
 - **STEP 5** — Real auth (JWT or Emergent Google) with role-gated routes.
 - **STEP 6** — Wire POS/Courier/Production to real APIs, drop all mock data.
 

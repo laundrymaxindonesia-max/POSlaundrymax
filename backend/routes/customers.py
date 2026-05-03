@@ -8,6 +8,7 @@ PATCH /api/customers/{customer_id}/deduct  → decrement remaining_quota_kg (mem
 
 from __future__ import annotations
 
+import re
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -43,10 +44,11 @@ async def list_customers(
 ) -> List[Customer]:
     query: dict = {}
     if q:
+        escaped = re.escape(q)
         query = {
             "$or": [
-                {"name": {"$regex": q, "$options": "i"}},
-                {"phone": {"$regex": q, "$options": "i"}},
+                {"name": {"$regex": escaped, "$options": "i"}},
+                {"phone": {"$regex": escaped, "$options": "i"}},
             ]
         }
 
