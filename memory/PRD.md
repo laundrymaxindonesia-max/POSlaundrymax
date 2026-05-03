@@ -86,14 +86,17 @@ Desktop sidebar layout (mobile drawer via burger menu) with mock auth badge "Sup
 - ✅ **STEP 1** (iter_13) — FastAPI boilerplate + 6 Pydantic models + Mongo connection + /api/health.
 - ✅ **STEP 2** (iter_14) — Orders CRUD + event audit log + Pipeline Dashboard wired.
 - ✅ **STEP 3** (iter_15) — Prices, Customers, B2B Quotas CRUD + Admin Pricing UI wired.
-- ✅ **STEP 4** (iter_16 + iter_17 fixes) — Staff + Attendance CRUD with multipart selfie uploads; HR Kiosk wired.
-  - StaticFiles mount at `/api/uploads` (routed through K8s ingress). Selfies saved to `/app/backend/uploads/attendance/`.
-  - `GET /api/staff` returns public shape (no PIN leaked).
-  - `POST /api/attendance/clock-in` — multipart (staff_id, pin_code, lat, lng, selfie). Validates PIN (403), rejects duplicate open sessions (409), validates image type (415) + size (5 MB cap).
-  - `POST /api/attendance/clock-out` — JSON; finds open attendance for staff, writes clock_out_time + deterministic shift_report_data (matches UI template).
-  - `POST /api/seed/staff` (6 default staff all PIN 1234); `/api/seed/all` now seeds 5 collections.
-  - Frontend `AttendanceKiosk.jsx`: staff list loaded from API (auto-seeds on empty), canvas-generated mock selfie uploaded via FormData, clock-out modal auto-fires API on open (StrictMode-guarded via useRef), WA message built dynamically from backend shift_report. Tests 100% green (iter_17).
-- **STEP 5** — Real auth (JWT or Emergent Google) with role-gated routes.
+- ✅ **STEP 4** (iter_16→iter_17) — Staff + Attendance CRUD with multipart selfie uploads; HR Kiosk wired.
+- ✅ **STEP 5** (iter_18→iter_19) — Auth & Role-Gated Routes.
+  - Emergent-managed Google OAuth: `POST /api/auth/session` exchanges session_id, whitelist-checks `theomahrizal@gmail.com`, sets httpOnly `session_token` cookie (secure, samesite=none).
+  - `GET /api/auth/me` — resolves user from cookie or `Authorization: Bearer`, RE-ENFORCES whitelist (defense-in-depth).
+  - `POST /api/auth/logout` — deletes session + clears cookie.
+  - `POST /api/auth/staff-pin` — validates PIN matches any seeded staff record (any PIN from `staff_col`).
+  - Frontend: `AuthProvider`, `AuthCallback` (handles `#session_id=` redirect), `OwnerProtectedRoute` wraps /admin + /dashboard, `StaffPinGate` wraps /, /production, /courier with sessionStorage `staff_pin_ok` flag.
+  - HeaderNav dynamically filters owner-only pills (Admin + Dashboard) based on `useAuth().user`.
+  - /absen stays PUBLIC.
+  - Auth playbook saved at `/app/auth_testing.md`; owner email + staff PIN in `/app/memory/test_credentials.md`.
+  - Tests: backend 13/13 GREEN, frontend 6/6 GREEN (iter_19).
 - **STEP 6** — Wire POS/Courier/Production to real APIs, drop all mock data.
 
 ### Frontend backlog
