@@ -82,22 +82,22 @@ Desktop sidebar layout (mobile drawer via burger menu) with mock auth badge "Sup
 - Pricing save & price-row delete/add buttons are non-functional (UI only).
 
 ## Backlog
-### Backend roadmap (in progress)
+### Backend roadmap — 🎉 COMPLETE
 - ✅ **STEP 1** (iter_13) — FastAPI boilerplate + 6 Pydantic models + Mongo connection + /api/health.
 - ✅ **STEP 2** (iter_14) — Orders CRUD + event audit log + Pipeline Dashboard wired.
 - ✅ **STEP 3** (iter_15) — Prices, Customers, B2B Quotas CRUD + Admin Pricing UI wired.
 - ✅ **STEP 4** (iter_16→iter_17) — Staff + Attendance CRUD with multipart selfie uploads; HR Kiosk wired.
-- ✅ **STEP 5** (iter_18→iter_19) — Auth & Role-Gated Routes.
-  - Emergent-managed Google OAuth: `POST /api/auth/session` exchanges session_id, whitelist-checks `theomahrizal@gmail.com`, sets httpOnly `session_token` cookie (secure, samesite=none).
-  - `GET /api/auth/me` — resolves user from cookie or `Authorization: Bearer`, RE-ENFORCES whitelist (defense-in-depth).
-  - `POST /api/auth/logout` — deletes session + clears cookie.
-  - `POST /api/auth/staff-pin` — validates PIN matches any seeded staff record (any PIN from `staff_col`).
-  - Frontend: `AuthProvider`, `AuthCallback` (handles `#session_id=` redirect), `OwnerProtectedRoute` wraps /admin + /dashboard, `StaffPinGate` wraps /, /production, /courier with sessionStorage `staff_pin_ok` flag.
-  - HeaderNav dynamically filters owner-only pills (Admin + Dashboard) based on `useAuth().user`.
-  - /absen stays PUBLIC.
-  - Auth playbook saved at `/app/auth_testing.md`; owner email + staff PIN in `/app/memory/test_credentials.md`.
-  - Tests: backend 13/13 GREEN, frontend 6/6 GREEN (iter_19).
-- **STEP 6** — Wire POS/Courier/Production to real APIs, drop all mock data.
+- ✅ **STEP 5** (iter_18→iter_19) — Auth & Role-Gated Routes (Emergent Google OAuth + Staff PIN).
+- ✅ **STEP 6** (iter_20) — Final wiring of POS, Production Scanner & Courier.
+  - `POST /api/orders/{order_id}/pod` — multipart Proof-of-Delivery photos, saved to `/api/uploads/pod/`, appended to `order.pod_urls[]`, audit event logged.
+  - Order model gains `pod_urls: List[str]`.
+  - POS `handleSave` fire-and-forget: `POST /api/orders` + `PATCH /api/customers/{id}/deduct` for members + `POST /api/customers` for new regulars. Optimistic cache via `lib/orderStore.js` kept for offline-resilience.
+  - Live prices fetched from `GET /api/prices`; customer directory pulled from `GET /api/customers` on mount.
+  - Production Scanner stations map Antrian→Cuci→Kering→Setrika→Packing; each tap fetches the oldest eligible order then `PATCH status` with actor=current-PIN-staff.
+  - Courier reads `status=Packing` (Menunggu di Outlet) + `status=OTW` (Di Atas Motor). "SCAN BARANG MASUK MOTOR" → PATCH Packing→OTW. "BARANG DITERIMA" → uploads 2 PoD photos → PATCH OTW→Selesai.
+  - `POST /api/auth/staff-pin` breaking change: now requires `{staff_id, pin_code}` and returns `StaffPinResponse` with identity so operational pages can tag orders with the correct actor.
+  - Staff PIN Gate: 2-step picker (staff tile → PIN) with identity stored in sessionStorage via `lib/staffSession.js`.
+  - Backend 73/73 GREEN; Frontend 4/5 critical flows GREEN (POS UI save-through blocked only by pre-existing payment-proof UX gate; backend create-order path proven by 5 direct API tests).
 
 ### Frontend backlog
 - **P0** Real auth (Google OAuth via Emergent or JWT) with role-gated routes (cashier/worker/courier/admin).
