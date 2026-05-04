@@ -131,8 +131,8 @@ export default function POSScreen() {
   const [activeTab, setActiveTab] = useState("kiloan");
 
   // Kiloan
-  const [kiloanKg, setKiloanKg] = useState(2.0);
-  const [kiloanInput, setKiloanInput] = useState("2.0");
+  const [kiloanKg, setKiloanKg] = useState(0);
+  const [kiloanInput, setKiloanInput] = useState("0.0");
   const [showKiloanDetail, setShowKiloanDetail] = useState(false);
   const [kiloanDetail, setKiloanDetail] = useState({});
 
@@ -284,9 +284,10 @@ export default function POSScreen() {
   const isMember = sumberOrder === "kosan";
   const discountRate = isMember ? 0.1 : 0;
 
-  // Adjust kiloan when source changes
+  // Adjust kiloan when source changes — but only if customer is ALREADY doing
+  // Kiloan (>0). Allow standalone Satuan / Sepatu / Showcase orders with 0 kg.
   useEffect(() => {
-    if (kiloanKg < minKg) {
+    if (kiloanKg > 0 && kiloanKg < minKg) {
       setKiloanKg(minKg);
       setKiloanInput(minKg.toFixed(1));
     }
@@ -301,9 +302,37 @@ export default function POSScreen() {
   };
 
   const updateKiloanKg = (newVal) => {
-    const clamped = Math.max(minKg, Math.max(0, newVal));
+    // Allow 0 (no kiloan). If positive but below minKg, snap up to minKg so
+    // the cashier never accidentally bills below the source's minimum.
+    if (newVal <= 0) {
+      setKiloanKg(0);
+      setKiloanInput("0.0");
+      return;
+    }
+    const clamped = Math.max(minKg, newVal);
     setKiloanKg(clamped);
     setKiloanInput(clamped.toFixed(1));
+  };
+
+  const handleKiloanIncrement = () => {
+    if (kiloanKg <= 0) {
+      // Jump straight to the source's minimum (e.g. 2.0 kg) on the first +
+      const start = minKg > 0 ? minKg : 0.5;
+      setKiloanKg(start);
+      setKiloanInput(start.toFixed(1));
+      return;
+    }
+    updateKiloanKg(kiloanKg + 0.5);
+  };
+
+  const handleKiloanDecrement = () => {
+    // Step down by 0.5 until we hit minKg, then one more press goes to 0.
+    if (kiloanKg <= minKg) {
+      setKiloanKg(0);
+      setKiloanInput("0.0");
+      return;
+    }
+    updateKiloanKg(kiloanKg - 0.5);
   };
 
   const handleKiloanInputChange = (e) => {
@@ -523,8 +552,8 @@ export default function POSScreen() {
   const resetAll = () => {
     setCustomerName("");
     setSumberOrder("walkin");
-    setKiloanKg(2.0);
-    setKiloanInput("2.0");
+    setKiloanKg(0);
+    setKiloanInput("0.0");
     setShowKiloanDetail(false);
     setKiloanDetail({});
     setSatuanCounts({});
@@ -944,13 +973,15 @@ export default function POSScreen() {
                 </span>
               </div>
               <p className="text-white/50 text-xs mb-5">
-                Atur berat cucian · min {minKg.toFixed(1)} kg
+                {kiloanKg > 0
+                  ? `Atur berat cucian · min ${minKg.toFixed(1)} kg`
+                  : `Tap + untuk Cuci Kiloan (mulai ${minKg.toFixed(1)} kg) — atau lewati kalau order Satuan/Sepatu/Showcase saja`}
               </p>
               <div className="flex items-center justify-between gap-3">
                 <CounterBtn
-                  onClick={() => updateKiloanKg(kiloanKg - 0.5)}
+                  onClick={handleKiloanDecrement}
                   testid="kiloan-decrease"
-                  disabled={kiloanKg <= minKg}
+                  disabled={kiloanKg <= 0}
                 >
                   <Minus size={22} />
                 </CounterBtn>
