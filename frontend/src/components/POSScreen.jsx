@@ -557,6 +557,73 @@ export default function POSScreen() {
     ).slice(0, 5);
   }, [searchQuery]);
 
+  // Customer-name autocomplete (live search against /api/customers?q=)
+  const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
+  const [customerSearchResults, setCustomerSearchResults] = useState([]);
+  const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
+
+  // Debounced fetch as the cashier types
+  useEffect(() => {
+    const q = customerName.trim();
+    if (q.length < 2) {
+      setCustomerSearchResults([]);
+      setCustomerSearchLoading(false);
+      return;
+    }
+    setCustomerSearchLoading(true);
+    const handle = setTimeout(async () => {
+      try {
+        const rows = await searchCustomers(q);
+        setCustomerSearchResults(Array.isArray(rows) ? rows.slice(0, 8) : []);
+      } catch (e) {
+        console.warn("customer search failed:", e.message);
+        setCustomerSearchResults([]);
+      } finally {
+        setCustomerSearchLoading(false);
+      }
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [customerName]);
+
+  const pickCustomerFromSearch = (apiCustomer) => {
+    setCustomerName(apiCustomer.name);
+    setCustomerSearchOpen(false);
+    if (apiCustomer.type === "Member") {
+      setMembers((prev) => {
+        if (prev.some((m) => m.name.toLowerCase() === apiCustomer.name.toLowerCase())) return prev;
+        return [
+          ...prev,
+          {
+            id: apiCustomer.id,
+            name: apiCustomer.name,
+            wa: apiCustomer.phone,
+            tier: apiCustomer.member_tier || "Silver",
+            quotaKg: apiCustomer.remaining_quota_kg ?? 0,
+            remainingKg: apiCustomer.remaining_quota_kg ?? 0,
+            expiry: apiCustomer.quota_expiry_date
+              ? new Date(apiCustomer.quota_expiry_date).toLocaleDateString("id-ID")
+              : "—",
+            source: "umum",
+          },
+        ];
+      });
+    } else {
+      setRegularCustomers((prev) => {
+        if (prev.some((c) => c.name.toLowerCase() === apiCustomer.name.toLowerCase())) return prev;
+        return [
+          ...prev,
+          {
+            id: apiCustomer.id,
+            name: apiCustomer.name,
+            wa: apiCustomer.phone,
+            address: apiCustomer.address || "",
+          },
+        ];
+      });
+    }
+    toast.success(`Pelanggan dipilih: ${apiCustomer.name}`);
+  };
+
   return (
     <div
       className="relative min-h-screen text-white font-body max-w-md mx-auto md:border-x md:border-white/5"
@@ -564,16 +631,16 @@ export default function POSScreen() {
     >
       {/* Header */}
       <header
-        className="sticky top-0 z-40 glass-strong border-b border-white/10 px-4 py-3 flex items-center justify-between gap-2"
+        className="sticky top-0 z-40 glass-strong border-b border-white/10 px-3 py-3 flex items-center justify-between gap-2"
         data-testid="pos-header"
       >
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-[#FFD700] flex items-center justify-center shadow-[0_0_20px_rgba(255,215,0,0.4)]">
+        <div className="flex items-center gap-2.5 min-w-0 flex-shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-[#FFD700] flex items-center justify-center shadow-[0_0_20px_rgba(255,215,0,0.4)] flex-shrink-0">
             <Shirt size={18} className="text-black" strokeWidth={2.5} />
           </div>
-          <div>
+          <div className="min-w-0">
             <div
-              className="font-heading font-extrabold text-[#FFD700] text-base leading-none tracking-tight"
+              className="font-heading font-extrabold text-[#FFD700] text-base leading-none tracking-tight truncate"
               data-testid="header-title"
             >
               LaundryMax
@@ -583,86 +650,12 @@ export default function POSScreen() {
             </div>
           </div>
         </div>
-        <HeaderNav />
+        <div className="min-w-0 flex-shrink overflow-hidden">
+          <HeaderNav />
+        </div>
       </header>
 
       <main className="px-5 pt-4 pb-44 space-y-4">
-        {/* Search bar */}
-        <section className="relative animate-fade-up" data-testid="search-section">
-          <div className="relative">
-            <Search
-              size={16}
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40"
-            />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setSearchOpen(true);
-              }}
-              onFocus={() => setSearchOpen(true)}
-              onBlur={() => setTimeout(() => setSearchOpen(false), 200)}
-              placeholder="Cari Orderan (ID / nama)..."
-              data-testid="search-input"
-              className="w-full h-12 pl-11 pr-11 rounded-2xl glass text-white placeholder-white/40 text-sm font-medium focus:border-[#FFD700]/50 focus:outline-none transition-colors"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => {
-                  setSearchQuery("");
-                  setSearchOpen(false);
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60"
-                aria-label="Clear search"
-              >
-                <X size={13} />
-              </button>
-            )}
-          </div>
-
-          {searchOpen && searchResults.length > 0 && (
-            <div
-              className="absolute top-14 inset-x-0 z-30 glass-strong border border-white/10 rounded-2xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.6)] animate-fade-up"
-              data-testid="search-results"
-            >
-              {searchResults.map((r) => (
-                <button
-                  key={r.id}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    setTrackOrder(r);
-                    setSearchOpen(false);
-                  }}
-                  data-testid={`search-result-${r.id}`}
-                  className="w-full px-4 py-3 flex items-center justify-between gap-3 hover:bg-white/5 border-b border-white/5 last:border-0 text-left transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-[#FFD700]/10 border border-[#FFD700]/25 flex items-center justify-center flex-shrink-0">
-                      <Package size={14} className="text-[#FFD700]" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="font-heading font-bold text-white text-sm">
-                        {r.customer}
-                      </div>
-                      <div className="text-white/40 text-[11px] flex items-center gap-1.5">
-                        <span className="font-mono">{r.id}</span>
-                        <span>·</span>
-                        <span>{r.kg} kg</span>
-                        <span>·</span>
-                        <span>{r.date}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-full bg-[#FFD700]/15 border border-[#FFD700]/30 text-[#FFD700] text-[9px] font-heading font-bold uppercase tracking-wider flex-shrink-0">
-                    {STAGES[r.stage]}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-
         {/* Customer block */}
         <section className="animate-fade-up space-y-3" style={{ animationDelay: "60ms" }}>
           <div>
@@ -672,16 +665,90 @@ export default function POSScreen() {
             <div className="relative">
               <User
                 size={16}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-[#FFD700]"
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-[#FFD700] pointer-events-none z-10"
               />
               <input
                 type="text"
                 value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
+                onChange={(e) => {
+                  setCustomerName(e.target.value);
+                  setCustomerSearchOpen(true);
+                }}
+                onFocus={() => setCustomerSearchOpen(true)}
+                onBlur={() =>
+                  setTimeout(() => setCustomerSearchOpen(false), 150)
+                }
                 placeholder="Masukkan nama pelanggan"
                 data-testid="customer-name-input"
+                autoComplete="off"
                 className="w-full h-14 pl-11 pr-4 rounded-2xl glass text-white placeholder-white/40 text-base font-medium focus:border-[#FFD700]/50 focus:outline-none transition-colors"
               />
+
+              {customerSearchOpen &&
+                customerName.trim().length >= 2 && (
+                  <div
+                    className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 rounded-2xl border border-[#FFD700]/25 bg-[#0F0F0F] shadow-[0_20px_60px_rgba(0,0,0,0.7)] overflow-hidden"
+                    data-testid="customer-search-dropdown"
+                  >
+                    {customerSearchLoading && (
+                      <div className="px-4 py-3 text-white/50 text-xs flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-full border-2 border-[#FFD700]/30 border-t-[#FFD700] animate-spin" />
+                        Mencari...
+                      </div>
+                    )}
+
+                    {!customerSearchLoading && customerSearchResults.length === 0 && (
+                      <div
+                        className="px-4 py-3 text-white/40 text-xs"
+                        data-testid="customer-search-empty"
+                      >
+                        Tidak ada pelanggan dengan nama / nomor itu. Lanjutkan
+                        ketik untuk pelanggan baru.
+                      </div>
+                    )}
+
+                    {!customerSearchLoading &&
+                      customerSearchResults.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => pickCustomerFromSearch(c)}
+                          data-testid={`customer-search-result-${c.id}`}
+                          className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-[#FFD700]/10 transition-colors border-b border-white/5 last:border-0"
+                        >
+                          <div
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center font-heading font-black text-sm flex-shrink-0 ${
+                              c.type === "Member"
+                                ? "bg-[#FFD700]/15 text-[#FFD700] border border-[#FFD700]/30"
+                                : "bg-white/5 text-white/70 border border-white/10"
+                            }`}
+                          >
+                            {(c.name || "?").charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-heading font-bold text-white text-sm truncate">
+                              {c.name}
+                            </div>
+                            <div className="text-white/50 text-[11px] flex items-center gap-1.5 truncate">
+                              <span className="font-mono">{c.phone}</span>
+                              {c.address && (
+                                <>
+                                  <span>·</span>
+                                  <span className="truncate">{c.address}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {c.type === "Member" && (
+                            <span className="px-2 py-0.5 rounded-full bg-[#FFD700]/15 border border-[#FFD700]/30 text-[#FFD700] text-[9px] font-heading font-bold uppercase tracking-wider flex-shrink-0">
+                              {c.member_tier || "Member"}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                  </div>
+                )}
             </div>
 
             {/* Membership Active Badge */}
