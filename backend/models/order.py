@@ -71,3 +71,7 @@ class Order(OrderBase):
         default_factory=lambda: datetime.now(timezone.utc)
     )
     order_events: List[OrderEvent] = Field(default_factory=list)
+    pod_urls: List[str] = Field(
+        default_factory=list,
+        description="Uploaded proof-of-delivery / proof-of-payment photo URLs",
+    )

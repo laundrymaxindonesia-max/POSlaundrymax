@@ -31,6 +31,13 @@ import {
   removePendingOrder,
   subscribePendingOrders,
 } from "@/lib/orderStore";
+import {
+  fetchOrders,
+  patchOrderStatus,
+  uploadPod,
+  generateMockPodBlob,
+} from "@/lib/api";
+import { getActorTag, getCurrentStaff } from "@/lib/staffSession";
 
 const INITIAL_MANIFEST = [
   { id: "LND-011", customer: "Tamel", weight: "2.5 kg", time: "11:02" },
@@ -94,11 +101,33 @@ const INITIAL_ON_MOTOR = [
   },
 ];
 
+function mapBackendOrder(o) {
+  const eta = Math.max(3, Math.min(30, Math.round((o.weight_kg || 3) * 2))) + " menit";
+  const itemsDesc = o.items_detail
+    ? o.items_detail
+    : `${o.weight_kg?.toFixed?.(1) || o.weight_kg} kg · ${o.source}`;
+  return {
+    id: o.order_id,
+    customer: o.customer_name,
+    address: o.customer_address || "—",
+    phone: o.customer_phone,
+    eta,
+    items: itemsDesc,
+    total:
+      "Rp " +
+      (Number(o.total_price) || 0).toLocaleString("id-ID").replace(/,/g, "."),
+    paymentStatus: o.payment_status === "Lunas" ? "lunas" : "nanti",
+    _raw: o,
+  };
+}
+
 export default function CourierDashboard() {
   const [activeTab, setActiveTab] = useState("pickup");
   const [manifest, setManifest] = useState(INITIAL_MANIFEST);
-  const [readyOrders, setReadyOrders] = useState(INITIAL_READY_ORDERS);
-  const [onMotorOrders, setOnMotorOrders] = useState(INITIAL_ON_MOTOR);
+  const [readyOrders, setReadyOrders] = useState([]);
+  const [onMotorOrders, setOnMotorOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const currentStaff = getCurrentStaff();
 
   // Pickup / motor-load scanner (reused)
   const [scanOpen, setScanOpen] = useState(false);
@@ -111,6 +140,9 @@ export default function CourierDashboard() {
   const [podCaptured, setPodCaptured] = useState(false);
   const [podPaymentCaptured, setPodPaymentCaptured] = useState(false);
   const [podCapturing, setPodCapturing] = useState(null); // "delivery" | "payment" | null
+  const [podSubmitting, setPodSubmitting] = useState(false);
+  const podDeliveryBlobRef = useRef(null);
+  const podPaymentBlobRef = useRef(null);
   const podTimerRef = useRef(null);
 
   useEffect(() => {
@@ -120,7 +152,28 @@ export default function CourierDashboard() {
     };
   }, []);
 
-  // Sync orders pushed from Cashier (Anter Jemput) into ready list
+  const loadCourierData = async () => {
+    setLoading(true);
+    try {
+      const [packing, otw] = await Promise.all([
+        fetchOrders({ status: "Packing", limit: 100 }),
+        fetchOrders({ status: "OTW", limit: 100 }),
+      ]);
+      setReadyOrders((packing || []).map(mapBackendOrder));
+      setOnMotorOrders((otw || []).map(mapBackendOrder));
+    } catch (e) {
+      toast.error(`Gagal memuat order: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCourierData();
+  }, []);
+
+  // Sync orders optimistically pushed from Cashier (Anter Jemput) — keep
+  // client-side cache for offline-first UX even when backend is temporarily slow
   useEffect(() => {
     const sync = () => {
       const stored = getPendingOrders();
@@ -170,24 +223,28 @@ export default function CourierDashboard() {
     }
     setScanMode("motor");
     setScanOpen(true);
-    scanTimerRef.current = setTimeout(() => {
-      setReadyOrders((prev) => {
-        if (prev.length === 0) return prev;
-        const picked = prev[0];
-        // Schedule side-effects after state settles (idempotent outside updater)
-        queueMicrotask(() => {
-          setOnMotorOrders((motor) => {
-            if (motor.some((m) => m.id === picked.id)) return motor;
-            return [picked, ...motor];
-          });
-          toast.success(`Order ${picked.id} masuk ke manifest motor`, {
-            description: "Status: Sedang Diantar",
-          });
+    scanTimerRef.current = setTimeout(async () => {
+      const picked = readyOrders[0];
+      if (!picked) {
+        setScanOpen(false);
+        return;
+      }
+      try {
+        const actor = getActorTag();
+        await patchOrderStatus(picked.id, "OTW", actor);
+        setReadyOrders((prev) => prev.filter((o) => o.id !== picked.id));
+        setOnMotorOrders((prev) =>
+          prev.some((m) => m.id === picked.id) ? prev : [picked, ...prev]
+        );
+        toast.success(`Order ${picked.id} masuk motor`, {
+          description: `Status: Sedang Diantar · oleh ${currentStaff?.name || "kurir"}`,
         });
-        return prev.slice(1);
-      });
-      setScanOpen(false);
-    }, 1500);
+      } catch (e) {
+        toast.error(`Gagal update status: ${e.message}`);
+      } finally {
+        setScanOpen(false);
+      }
+    }, 1200);
   };
 
   const handleCloseScan = (open) => {
@@ -233,18 +290,45 @@ export default function CourierDashboard() {
   const podPaymentRequired = podOrder?.paymentStatus === "nanti";
   const podReady = podCaptured && (!podPaymentRequired || podPaymentCaptured);
 
-  const confirmDelivery = () => {
-    if (!podReady || !podOrder) return;
-    setOnMotorOrders((prev) => prev.filter((d) => d.id !== podOrder.id));
-    removePendingOrder(podOrder.id);
-    toast.success("Order Selesai Diantar!", {
-      description: `${podOrder.id} · ${podOrder.customer}`,
-    });
-    setPodOpen(false);
-    setPodOrder(null);
-    setPodCaptured(false);
-    setPodPaymentCaptured(false);
-    setPodCapturing(null);
+  const confirmDelivery = async () => {
+    if (!podReady || !podOrder || podSubmitting) return;
+    setPodSubmitting(true);
+    try {
+      const actor = getActorTag();
+      const deliveryBlob = podDeliveryBlobRef.current;
+      if (deliveryBlob) {
+        const file = new File([deliveryBlob], `pod_${podOrder.id}.png`, {
+          type: "image/png",
+        });
+        await uploadPod(podOrder.id, { actor, kind: "delivery", photo: file });
+      }
+      if (podPaymentRequired && podPaymentBlobRef.current) {
+        const payFile = new File(
+          [podPaymentBlobRef.current],
+          `pay_${podOrder.id}.png`,
+          { type: "image/png" }
+        );
+        await uploadPod(podOrder.id, { actor, kind: "payment", photo: payFile });
+      }
+      await patchOrderStatus(podOrder.id, "Selesai", actor);
+
+      setOnMotorOrders((prev) => prev.filter((d) => d.id !== podOrder.id));
+      removePendingOrder(podOrder.id);
+      toast.success("Order Selesai Diantar!", {
+        description: `${podOrder.id} · ${podOrder.customer}`,
+      });
+      setPodOpen(false);
+      setPodOrder(null);
+      setPodCaptured(false);
+      setPodPaymentCaptured(false);
+      setPodCapturing(null);
+      podDeliveryBlobRef.current = null;
+      podPaymentBlobRef.current = null;
+    } catch (e) {
+      toast.error(`Gagal konfirmasi pengiriman: ${e.message}`);
+    } finally {
+      setPodSubmitting(false);
+    }
   };
 
   const handleClosePod = (open) => {

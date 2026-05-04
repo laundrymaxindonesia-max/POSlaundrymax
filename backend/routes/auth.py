@@ -6,7 +6,7 @@ Owner flow (Google OAuth):
   POST /api/auth/logout       — delete session + clear cookie
 
 Staff flow (kiosk PIN):
-  POST /api/auth/staff-pin    — returns 200 if PIN matches any seeded Staff record, else 403
+  POST /api/auth/staff-pin    — body: {staff_id, pin_code} → returns staff info if valid, else 403
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Cookie, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Cookie, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from db import db, staff_col
@@ -50,7 +50,16 @@ class SessionExchangeRequest(BaseModel):
 
 
 class StaffPinRequest(BaseModel):
+    staff_id: str = Field(..., min_length=1)
     pin_code: str = Field(..., min_length=4, max_length=4, pattern=r"^\d{4}$")
+
+
+class StaffPinResponse(BaseModel):
+    ok: bool
+    staff_id: str
+    name: str
+    role: str
+    display_role: Optional[str] = None
 
 
 # ---------------- Helpers ----------------
@@ -201,14 +210,23 @@ async def logout(
 
 
 # ---------------- POST /api/auth/staff-pin ----------------
-@router.post("/staff-pin")
+@router.post("/staff-pin", response_model=StaffPinResponse)
 async def staff_pin(payload: StaffPinRequest):
-    """Validates that the submitted 4-digit PIN matches ANY seeded staff.
+    """Validates that the submitted PIN matches the chosen Staff's PIN.
 
-    Returned body intentionally does NOT reveal which staff owns the PIN —
-    staff identity for attendance is chosen separately in the kiosk UI.
+    Returns staff identity so the frontend can use it as the `actor` when
+    calling order-transition endpoints.
     """
-    match = await staff_col.find_one({"pin_code": payload.pin_code}, {"_id": 0, "pin_code": 0})
+    match = await staff_col.find_one(
+        {"id": payload.staff_id, "pin_code": payload.pin_code},
+        {"_id": 0, "pin_code": 0},
+    )
     if not match:
         raise HTTPException(status_code=403, detail="PIN salah")
-    return {"ok": True}
+    return StaffPinResponse(
+        ok=True,
+        staff_id=match["id"],
+        name=match["name"],
+        role=match["role"],
+        display_role=match.get("display_role"),
+    )

@@ -46,6 +46,14 @@ import { toast } from "sonner";
 import HeaderNav from "@/components/HeaderNav";
 import { pushPendingOrder } from "@/lib/orderStore";
 import {
+  createOrder,
+  deductQuota,
+  fetchPrices,
+  searchCustomers,
+  createCustomer,
+} from "@/lib/api";
+import { getActorTag, getCurrentStaff } from "@/lib/staffSession";
+import {
   KILOAN_PRICE,
   SATUAN_ITEMS,
   SEPATU_ITEMS,
@@ -170,6 +178,82 @@ export default function POSScreen() {
   const [regCustName, setRegCustName] = useState("");
   const [regCustWa, setRegCustWa] = useState("");
   const [regCustAddress, setRegCustAddress] = useState("");
+
+  // Live prices from backend (falls back to the hardcoded defaults on failure)
+  const [livePrices, setLivePrices] = useState(null);
+  // Memoised current staff so we can tag orders with the correct actor
+  const currentStaff = getCurrentStaff();
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const rows = await fetchPrices();
+        if (Array.isArray(rows) && rows.length > 0) {
+          const map = Object.fromEntries(rows.map((p) => [p.service_id, p]));
+          setLivePrices(map);
+        }
+      } catch (e) {
+        console.warn("Gagal sync harga dari backend:", e.message);
+      }
+    })();
+  }, []);
+
+  // Initial customer directory sync from the backend so the POS search modal
+  // sees what Admin/previous POS sessions already created.
+  useEffect(() => {
+    (async () => {
+      try {
+        const rows = await searchCustomers("");
+        if (!Array.isArray(rows)) return;
+        // Split into members vs regulars
+        const apiMembers = [];
+        const apiRegulars = [];
+        for (const c of rows) {
+          if (c.type === "Member") {
+            apiMembers.push({
+              id: c.id,
+              name: c.name,
+              wa: c.phone,
+              tier: c.member_tier || "Silver",
+              quotaKg: c.remaining_quota_kg ?? 0,
+              remainingKg: c.remaining_quota_kg ?? 0,
+              expiry: c.quota_expiry_date
+                ? new Date(c.quota_expiry_date).toLocaleDateString("id-ID")
+                : "—",
+              source: "umum",
+            });
+          } else {
+            apiRegulars.push({
+              id: c.id,
+              name: c.name,
+              wa: c.phone,
+              address: c.address || "",
+            });
+          }
+        }
+        if (apiMembers.length > 0) {
+          setMembers((prev) => {
+            const existing = new Set(prev.map((m) => m.name.toLowerCase()));
+            const fresh = apiMembers.filter(
+              (m) => !existing.has(m.name.toLowerCase())
+            );
+            return [...prev, ...fresh];
+          });
+        }
+        if (apiRegulars.length > 0) {
+          setRegularCustomers((prev) => {
+            const existing = new Set(prev.map((c) => c.name.toLowerCase()));
+            const fresh = apiRegulars.filter(
+              (c) => !existing.has(c.name.toLowerCase())
+            );
+            return [...prev, ...fresh];
+          });
+        }
+      } catch (e) {
+        console.warn("Gagal sync customers dari backend:", e.message);
+      }
+    })();
+  }, []);
 
   const activeMember = useMemo(() => {
     const q = customerName.trim().toLowerCase();
@@ -355,6 +439,15 @@ export default function POSScreen() {
             : m
         )
       );
+      // Fire-and-forget: deduct quota on the server too, so other clients see it
+      if (activeMember.id) {
+        deductQuota(activeMember.id, kiloanKg, `order ${id}`).catch((err) => {
+          console.warn("Deduct quota gagal:", err.message);
+          toast.warning("Sinkronisasi quota ke server gagal", {
+            description: "Quota lokal diupdate, retry server di background.",
+          });
+        });
+      }
     } else {
       setReceiptUsedMembership(false);
       setReceiptMemberSnapshot(null);
@@ -383,6 +476,41 @@ export default function POSScreen() {
         paymentStatus: usingMembership ? "lunas" : paymentStatus,
       });
     }
+
+    // Persist to backend as the source of truth — optimistic cache is the UI
+    // and `orderStore.js` for the courier; errors surface via toast but don't
+    // block the receipt.
+    const sourceMap = {
+      walkin: "Walk-in",
+      tamel: "Tamel",
+      anter: "Anter",
+      kosan: "Kosan",
+    };
+    const itemsSummary = [];
+    if (kiloanKg > 0) itemsSummary.push(`${kiloanKg.toFixed(1)}kg kiloan`);
+    Object.entries(satuanCounts).forEach(([k, v]) => { if (v > 0) itemsSummary.push(`${v}× ${k}`); });
+    Object.entries(sepatuCounts).forEach(([k, v]) => { if (v > 0) itemsSummary.push(`${v}× ${k}`); });
+    Object.entries(showcaseCounts).forEach(([k, v]) => { if (v > 0) itemsSummary.push(`${v}× ${k}`); });
+
+    const payload = {
+      order_id: id,
+      customer_name: customerName.trim() || "Walk-in",
+      customer_phone: customerProfile?.wa || activeMember?.wa || "-",
+      customer_address: customerProfile?.address || null,
+      source: sourceMap[sumberOrder] || "Walk-in",
+      weight_kg: Number(kiloanKg) || 0,
+      items_detail: itemsSummary.join(", ") || null,
+      total_price: usingMembership ? 0 : Math.round(total || 0),
+      payment_status: usingMembership ? "Lunas" : (paymentStatus === "lunas" ? "Lunas" : "Nanti"),
+      order_status: "Antrian",
+      actor: getActorTag() || `kasir-${(currentStaff?.name || "unknown").toLowerCase()}`,
+    };
+    createOrder(payload).catch((err) => {
+      console.error("Gagal menyimpan order ke backend:", err.message);
+      toast.error("Simpan ke server gagal", {
+        description: `Order tersimpan lokal. Detail: ${err.message}`,
+      });
+    });
 
     setQrOpen(true);
   };
@@ -1273,6 +1401,17 @@ export default function POSScreen() {
           });
           setCustomerName(entry.name);
           setRegCustOpen(false);
+          // Persist to backend — swallow 409 (duplicate phone) silently
+          createCustomer({
+            name: entry.name,
+            phone: entry.wa || "",
+            address: entry.address || null,
+            type: "Regular",
+          }).catch((err) => {
+            if (!/409/.test(err.message)) {
+              console.warn("Gagal simpan customer ke backend:", err.message);
+            }
+          });
         }}
       />
     </div>

@@ -8,6 +8,9 @@ import {
   X,
   Factory,
   CheckCircle2,
+  AlertTriangle,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import {
   Dialog,
@@ -18,6 +21,8 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import HeaderNav from "@/components/HeaderNav";
+import { fetchOrders, patchOrderStatus } from "@/lib/api";
+import { getActorTag, getCurrentStaff } from "@/lib/staffSession";
 
 const STATIONS = [
   {
@@ -27,6 +32,8 @@ const STATIONS = [
     Icon: Waves,
     glow: "from-[#3DA5FF]/20 to-transparent",
     ring: "#3DA5FF",
+    sourceStatus: "Antrian",
+    targetStatus: "Cuci",
   },
   {
     id: "dry",
@@ -35,6 +42,8 @@ const STATIONS = [
     Icon: Flame,
     glow: "from-[#FF8A3D]/20 to-transparent",
     ring: "#FF8A3D",
+    sourceStatus: "Cuci",
+    targetStatus: "Kering",
   },
   {
     id: "iron",
@@ -43,6 +52,8 @@ const STATIONS = [
     Icon: Shirt,
     glow: "from-[#FFD700]/25 to-transparent",
     ring: "#FFD700",
+    sourceStatus: "Kering",
+    targetStatus: "Setrika",
   },
   {
     id: "pack",
@@ -51,6 +62,8 @@ const STATIONS = [
     Icon: Package,
     glow: "from-[#7DF08F]/20 to-transparent",
     ring: "#7DF08F",
+    sourceStatus: "Setrika",
+    targetStatus: "Packing",
   },
 ];
 
@@ -62,44 +75,125 @@ const STATUS_STYLE = {
   READY: "bg-white/10 text-white/70 border-white/20",
 };
 
-const INITIAL_SCANS = [
-  { id: "LND-001", customer: "Budi Santoso", status: "IRON", time: "10:42" },
-  { id: "LND-002", customer: "Siti Rahayu", status: "DRY", time: "10:31" },
-  { id: "LND-003", customer: "Andi Wijaya", status: "WASH", time: "10:18" },
-  { id: "LND-004", customer: "Ratna Dewi", status: "PACK", time: "09:55" },
-  { id: "LND-005", customer: "Rudi Hartono", status: "READY", time: "09:40" },
-];
+// Map backend order_status → station label shown in the Recent scans list
+const STATUS_TO_LABEL = {
+  Cuci: "WASH",
+  Kering: "DRY",
+  Setrika: "IRON",
+  Packing: "PACK",
+  OTW: "READY",
+  Selesai: "READY",
+};
+
+function formatTime(iso) {
+  try {
+    return new Date(iso).toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch (e) {
+    return "--:--";
+  }
+}
 
 export default function ProductionScanner() {
   const [scanOpen, setScanOpen] = useState(false);
   const [activeStation, setActiveStation] = useState(null);
-  const [recentScans, setRecentScans] = useState(INITIAL_SCANS);
+  const [recentScans, setRecentScans] = useState([]);
+  const [loading, setLoading] = useState(true);
   const timerRef = useRef(null);
+  const currentStaff = getCurrentStaff();
 
-  const handleStationClick = (station) => {
+  const loadRecent = async () => {
+    setLoading(true);
+    try {
+      // Pull a mix of orders currently mid-pipeline so the list is useful
+      const rows = await fetchOrders({ limit: 80 });
+      const filtered = (rows || [])
+        .filter((o) => ["Cuci", "Kering", "Setrika", "Packing"].includes(o.order_status))
+        .slice(0, 12)
+        .map((o) => {
+          const lastEvent = (o.order_events || []).slice(-1)[0];
+          return {
+            id: o.order_id,
+            customer: o.customer_name,
+            status: STATUS_TO_LABEL[o.order_status] || o.order_status,
+            backendStatus: o.order_status,
+            time: formatTime(lastEvent?.timestamp || o.created_at),
+          };
+        });
+      setRecentScans(filtered);
+    } catch (e) {
+      toast.error(`Gagal memuat order: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRecent();
+  }, []);
+
+  const handleStationClick = async (station) => {
     setActiveStation(station);
     setScanOpen(true);
-    timerRef.current = setTimeout(() => {
-      const scannedOrderId =
-        "LND-" + String(Math.floor(Math.random() * 900) + 100).padStart(3, "0");
-      toast.success(`Order ${scannedOrderId} Status Updated!`, {
-        description: `Dipindahkan ke stasiun ${station.label}`,
-      });
-      setRecentScans((prev) => [
-        {
-          id: scannedOrderId,
-          customer: "Pelanggan Baru",
-          status: station.label,
-          time: new Date().toLocaleTimeString("id-ID", {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        },
-        ...prev.slice(0, 9),
-      ]);
+    // Pick the oldest order whose current status is the prerequisite for this station
+    let candidate = null;
+    try {
+      const rows = await fetchOrders({ status: station.sourceStatus, limit: 50 });
+      if (Array.isArray(rows) && rows.length > 0) {
+        candidate = rows[rows.length - 1]; // oldest (created_at DESC → last)
+      }
+    } catch (e) {
+      toast.error(`Gagal mengambil antrian: ${e.message}`);
       setScanOpen(false);
       setActiveStation(null);
-    }, 1500);
+      return;
+    }
+
+    if (!candidate) {
+      timerRef.current = setTimeout(() => {
+        toast.info("Tidak ada order di antrian", {
+          description: `Tidak ada order dengan status ${station.sourceStatus}.`,
+        });
+        setScanOpen(false);
+        setActiveStation(null);
+      }, 900);
+      return;
+    }
+
+    // Simulate scanning delay then PATCH status
+    timerRef.current = setTimeout(async () => {
+      try {
+        const actor = getActorTag();
+        const updated = await patchOrderStatus(
+          candidate.order_id,
+          station.targetStatus,
+          actor
+        );
+        toast.success(`${candidate.order_id} → ${station.label}`, {
+          description: `Oleh ${currentStaff?.name || "staff"}`,
+        });
+        setRecentScans((prev) => [
+          {
+            id: updated.order_id,
+            customer: updated.customer_name,
+            status: station.label,
+            backendStatus: updated.order_status,
+            time: new Date().toLocaleTimeString("id-ID", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          },
+          ...prev.filter((s) => s.id !== updated.order_id).slice(0, 11),
+        ]);
+      } catch (e) {
+        toast.error(`Gagal update: ${e.message}`);
+      } finally {
+        setScanOpen(false);
+        setActiveStation(null);
+      }
+    }, 1200);
   };
 
   useEffect(() => {
@@ -144,10 +238,23 @@ export default function ProductionScanner() {
             </div>
             <div className="text-white/50 text-[10px] uppercase tracking-[0.15em] mt-0.5">
               Production · <span className="text-[#FFD700]" data-testid="active-orders-count">{activeOrdersCount}</span> aktif
+              {currentStaff?.name && (
+                <span className="text-white/30"> · {currentStaff.name}</span>
+              )}
             </div>
           </div>
         </div>
-        <HeaderNav />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={loadRecent}
+            disabled={loading}
+            data-testid="production-refresh"
+            className="h-9 w-9 rounded-full bg-white/5 border border-white/10 hover:border-[#FFD700]/40 text-white/60 hover:text-[#FFD700] flex items-center justify-center transition-colors disabled:opacity-40"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+          </button>
+          <HeaderNav />
+        </div>
       </header>
 
       <main className="px-4 pt-5 pb-8 space-y-6">

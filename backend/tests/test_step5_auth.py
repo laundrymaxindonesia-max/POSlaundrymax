@@ -39,29 +39,53 @@ def seed_data():
     yield
 
 
-# ---------------- Staff PIN ----------------
+# ---------------- Staff PIN (STEP 6 contract: {staff_id, pin_code}) ----------------
+def _get_staff_by_name(name: str) -> dict:
+    r = requests.get(f"{API}/staff")
+    assert r.status_code == 200
+    for s in r.json():
+        if s["name"].lower() == name.lower():
+            return s
+    raise RuntimeError(f"staff {name} not seeded")
+
+
 class TestStaffPin:
-    def test_staff_pin_correct_returns_200(self):
-        r = requests.post(f"{API}/auth/staff-pin", json={"pin_code": "1234"})
+    def test_staff_pin_correct_returns_200_with_identity(self):
+        erfa = _get_staff_by_name("Erfa")
+        r = requests.post(f"{API}/auth/staff-pin", json={"staff_id": erfa["id"], "pin_code": "1234"})
         assert r.status_code == 200, r.text
         body = r.json()
-        assert body == {"ok": True}
+        assert body["ok"] is True
+        assert body["staff_id"] == erfa["id"]
+        assert body["name"] == "Erfa"
+        assert body["role"] == "Kasir"
+        assert body["display_role"] == "Kasir Outlet"
 
     def test_staff_pin_wrong_returns_403(self):
-        r = requests.post(f"{API}/auth/staff-pin", json={"pin_code": "9999"})
+        erfa = _get_staff_by_name("Erfa")
+        r = requests.post(f"{API}/auth/staff-pin", json={"staff_id": erfa["id"], "pin_code": "9999"})
         assert r.status_code == 403, r.text
         assert r.json().get("detail") == "PIN salah"
 
-    def test_staff_pin_too_short_returns_422(self):
-        r = requests.post(f"{API}/auth/staff-pin", json={"pin_code": "123"})
+    def test_staff_pin_mismatched_id_pin_returns_403(self):
+        # Use valid Erfa id but someone else's implied pin mismatch — all seeds use 1234, so
+        # simulate mismatch by sending a bogus id + correct pin.
+        r = requests.post(f"{API}/auth/staff-pin", json={"staff_id": "nonexistent-id-xyz", "pin_code": "1234"})
+        assert r.status_code == 403, r.text
+        assert r.json().get("detail") == "PIN salah"
+
+    def test_staff_pin_missing_staff_id_returns_422(self):
+        r = requests.post(f"{API}/auth/staff-pin", json={"pin_code": "1234"})
         assert r.status_code == 422
 
-    def test_staff_pin_missing_field_returns_422(self):
-        r = requests.post(f"{API}/auth/staff-pin", json={})
+    def test_staff_pin_missing_pin_returns_422(self):
+        erfa = _get_staff_by_name("Erfa")
+        r = requests.post(f"{API}/auth/staff-pin", json={"staff_id": erfa["id"]})
         assert r.status_code == 422
 
     def test_staff_pin_non_digits_returns_422(self):
-        r = requests.post(f"{API}/auth/staff-pin", json={"pin_code": "abcd"})
+        erfa = _get_staff_by_name("Erfa")
+        r = requests.post(f"{API}/auth/staff-pin", json={"staff_id": erfa["id"], "pin_code": "abcd"})
         assert r.status_code == 422
 
 
