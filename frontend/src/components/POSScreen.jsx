@@ -962,68 +962,98 @@ export default function POSScreen() {
             {/* Kiloan */}
             <TabsContent
               value="kiloan"
-              className="mt-4 glass rounded-2xl p-6 animate-fade-up"
+              className="mt-4 animate-fade-up"
             >
-              <div className="flex items-baseline justify-between mb-1">
-                <h3 className="font-heading font-bold text-xl text-white">
-                  Cuci Kiloan
-                </h3>
-                <span className="text-[#FFD700] font-semibold text-sm">
-                  {formatIDR(KILOAN_PRICE)}/kg
-                </span>
-              </div>
-              <p className="text-white/50 text-xs mb-5">
-                {kiloanKg > 0
-                  ? `Atur berat cucian · min ${minKg.toFixed(1)} kg`
-                  : `Tap + untuk Cuci Kiloan (mulai ${minKg.toFixed(1)} kg) — atau lewati kalau order Satuan/Sepatu/Showcase saja`}
-              </p>
-              <div className="flex items-center justify-between gap-3">
-                <CounterBtn
-                  onClick={handleKiloanDecrement}
-                  testid="kiloan-decrease"
-                  disabled={kiloanKg <= 0}
+              {kiloanKg <= 0 ? (
+                <button
+                  type="button"
+                  onClick={handleKiloanIncrement}
+                  data-testid="kiloan-add-button"
+                  className="group w-full flex items-center justify-between gap-3 px-5 py-4 rounded-2xl glass border border-dashed border-[#FFD700]/30 hover:border-[#FFD700]/60 hover:bg-[#FFD700]/[0.04] transition-all active:scale-[0.99]"
                 >
-                  <Minus size={22} />
-                </CounterBtn>
-                <div className="flex-1 text-center">
-                  <div className="relative flex items-baseline justify-center gap-1">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={kiloanInput}
-                      onChange={handleKiloanInputChange}
-                      onBlur={handleKiloanInputBlur}
-                      data-testid="kiloan-manual-input"
-                      className="w-28 bg-transparent text-center font-heading font-black text-[#FFD700] text-5xl leading-none tracking-tight focus:outline-none border-b-2 border-transparent focus:border-[#FFD700]/40 transition-colors"
-                    />
-                    <span className="font-heading font-bold text-white/40 text-lg">kg</span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-[#FFD700]/15 border border-[#FFD700]/30 flex items-center justify-center flex-shrink-0 group-hover:bg-[#FFD700] group-hover:text-black transition-colors">
+                      <Plus size={20} className="text-[#FFD700] group-hover:text-black" strokeWidth={2.5} />
+                    </div>
+                    <div className="text-left min-w-0">
+                      <div className="font-heading font-extrabold text-white text-sm tracking-tight">
+                        Tambah Cuci Kiloan
+                      </div>
+                      <div className="text-white/40 text-[11px] mt-0.5">
+                        Mulai {minKg.toFixed(1)} kg · {formatIDR(KILOAN_PRICE)}/kg
+                      </div>
+                    </div>
                   </div>
-                  <div
-                    className="text-white/50 text-[10px] uppercase tracking-widest mt-1.5"
-                    data-testid="kiloan-kg-display"
-                  >
-                    Kilogram
+                  <span className="text-[10px] uppercase tracking-widest font-heading font-bold text-[#FFD700]/70 flex-shrink-0">
+                    Opsional
+                  </span>
+                </button>
+              ) : (
+                <div className="glass rounded-2xl p-6">
+                  <div className="flex items-baseline justify-between mb-1">
+                    <h3 className="font-heading font-bold text-xl text-white">
+                      Cuci Kiloan
+                    </h3>
+                    <span className="text-[#FFD700] font-semibold text-sm">
+                      {formatIDR(KILOAN_PRICE)}/kg
+                    </span>
+                  </div>
+                  <p className="text-white/50 text-xs mb-5">
+                    Atur berat cucian · min {minKg.toFixed(1)} kg · tekan{" "}
+                    <span className="text-[#FFD700]/80">−</span> sampai 0 untuk
+                    membatalkan
+                  </p>
+                  <div className="flex items-center justify-between gap-3">
+                    <CounterBtn
+                      onClick={handleKiloanDecrement}
+                      testid="kiloan-decrease"
+                      disabled={kiloanKg <= 0}
+                    >
+                      <Minus size={22} />
+                    </CounterBtn>
+                    <div className="flex-1 text-center">
+                      <div className="relative flex items-baseline justify-center gap-1">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={kiloanInput}
+                          onChange={handleKiloanInputChange}
+                          onBlur={handleKiloanInputBlur}
+                          data-testid="kiloan-manual-input"
+                          className="w-28 bg-transparent text-center font-heading font-black text-[#FFD700] text-5xl leading-none tracking-tight focus:outline-none border-b-2 border-transparent focus:border-[#FFD700]/40 transition-colors"
+                        />
+                        <span className="font-heading font-bold text-white/40 text-lg">
+                          kg
+                        </span>
+                      </div>
+                      <div
+                        className="text-white/50 text-[10px] uppercase tracking-widest mt-1.5"
+                        data-testid="kiloan-kg-display"
+                      >
+                        Kilogram
+                      </div>
+                    </div>
+                    <CounterBtn
+                      onClick={handleKiloanIncrement}
+                      testid="kiloan-increase"
+                      variant="primary"
+                    >
+                      <Plus size={22} />
+                    </CounterBtn>
+                  </div>
+                  <div className="mt-5 pt-4 border-t border-white/5 flex justify-between items-center">
+                    <span className="text-white/60 text-sm">Subtotal kiloan</span>
+                    <span
+                      className="font-heading font-bold text-white text-lg"
+                      data-testid="kiloan-subtotal"
+                    >
+                      {formatIDR(kiloanKg * KILOAN_PRICE)}
+                    </span>
                   </div>
                 </div>
-                <CounterBtn
-                  onClick={() => updateKiloanKg(kiloanKg + 0.5)}
-                  testid="kiloan-increase"
-                  variant="primary"
-                >
-                  <Plus size={22} />
-                </CounterBtn>
-              </div>
-              <div className="mt-5 pt-4 border-t border-white/5 flex justify-between items-center">
-                <span className="text-white/60 text-sm">Subtotal kiloan</span>
-                <span
-                  className="font-heading font-bold text-white text-lg"
-                  data-testid="kiloan-subtotal"
-                >
-                  {formatIDR(kiloanKg * KILOAN_PRICE)}
-                </span>
-              </div>
+              )}
 
-              {usingMembership && (
+              {kiloanKg > 0 && usingMembership && (
                 <div
                   className={`mt-3 p-3 rounded-xl border ${TIER_STYLE[activeMember.tier].bg} ${TIER_STYLE[activeMember.tier].border}`}
                   data-testid="membership-helper"
@@ -1051,8 +1081,9 @@ export default function POSScreen() {
                 </div>
               )}
 
-              {/* Optional detail */}
-              <div className="mt-4 pt-4 border-t border-white/5">
+              {/* Optional detail (only when kiloan is active) */}
+              {kiloanKg > 0 && (
+                <div className="mt-4 pt-4 border-t border-white/5">
                 <button
                   onClick={() => setShowKiloanDetail((v) => !v)}
                   data-testid="toggle-kiloan-detail"
@@ -1117,6 +1148,7 @@ export default function POSScreen() {
                   </div>
                 )}
               </div>
+              )}
             </TabsContent>
 
             <TabsContent value="satuan" className="mt-4 space-y-2.5">
