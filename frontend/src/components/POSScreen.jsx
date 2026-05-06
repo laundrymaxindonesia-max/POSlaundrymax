@@ -26,6 +26,9 @@ import {
   MapPin,
   Phone,
   NotebookPen,
+  Zap,
+  Timer,
+  Hourglass,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -65,6 +68,8 @@ import {
   INITIAL_MEMBERS,
   TIER_STYLE,
   formatIDR,
+  SPEED_TIERS,
+  SPEED_TIER_LABEL,
 } from "@/components/pos/data";
 import MembershipModal from "@/components/pos/MembershipModal";
 import RegularCustomerModal from "@/components/pos/RegularCustomerModal";
@@ -87,40 +92,60 @@ const CounterBtn = ({ onClick, children, testid, variant = "default", disabled =
   </button>
 );
 
-const ItemRow = ({ item, count, onInc, onDec, idx }) => (
-  <div
-    className="glass rounded-2xl p-4 flex items-center justify-between animate-fade-up"
-    style={{ animationDelay: `${idx * 40}ms` }}
-    data-testid={`item-row-${item.id}`}
-  >
-    <div className="flex-1 min-w-0">
-      <div className="font-heading font-semibold text-white text-lg truncate">
-        {item.name}
+const ItemRow = ({ item, count, onInc, onDec, idx, multiplier = 1 }) => {
+  const effectivePrice = Math.round(item.price * multiplier);
+  return (
+    <div
+      className="glass rounded-2xl p-4 flex items-center justify-between animate-fade-up"
+      style={{ animationDelay: `${idx * 40}ms` }}
+      data-testid={`item-row-${item.id}`}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="font-heading font-semibold text-white text-lg truncate">
+          {item.name}
+        </div>
+        <div className="text-white/50 text-xs mt-0.5">
+          {multiplier !== 1 ? (
+            <>
+              <span className="line-through text-white/30 mr-1">
+                {formatIDR(item.price)}
+              </span>
+              <span
+                className="text-[#FFD700] font-semibold"
+                data-testid={`item-price-${item.id}`}
+              >
+                {formatIDR(effectivePrice)}
+              </span>{" "}
+              <span className="text-white/40">/ pcs</span>
+            </>
+          ) : (
+            <span data-testid={`item-price-${item.id}`}>
+              {formatIDR(effectivePrice)} / pcs
+            </span>
+          )}
+        </div>
       </div>
-      <div className="text-white/50 text-xs mt-0.5">
-        {formatIDR(item.price)} / pcs
+      <div className="flex items-center gap-3 ml-2">
+        <CounterBtn onClick={onDec} testid={`item-counter-decrease-${item.id}`}>
+          <Minus size={18} />
+        </CounterBtn>
+        <div
+          className="min-w-[2rem] text-center font-heading font-bold text-2xl text-[#FFD700]"
+          data-testid={`item-count-${item.id}`}
+        >
+          {count}
+        </div>
+        <CounterBtn
+          onClick={onInc}
+          testid={`item-counter-increase-${item.id}`}
+          variant={count > 0 ? "primary" : "default"}
+        >
+          <Plus size={18} />
+        </CounterBtn>
       </div>
     </div>
-    <div className="flex items-center gap-3 ml-2">
-      <CounterBtn onClick={onDec} testid={`item-counter-decrease-${item.id}`}>
-        <Minus size={18} />
-      </CounterBtn>
-      <div
-        className="min-w-[2rem] text-center font-heading font-bold text-2xl text-[#FFD700]"
-        data-testid={`item-count-${item.id}`}
-      >
-        {count}
-      </div>
-      <CounterBtn
-        onClick={onInc}
-        testid={`item-counter-increase-${item.id}`}
-        variant={count > 0 ? "primary" : "default"}
-      >
-        <Plus size={18} />
-      </CounterBtn>
-    </div>
-  </div>
-);
+  );
+};
 
 export default function POSScreen() {
   // Customer
@@ -135,6 +160,10 @@ export default function POSScreen() {
   const [kiloanInput, setKiloanInput] = useState("0.0");
   const [showKiloanDetail, setShowKiloanDetail] = useState(false);
   const [kiloanDetail, setKiloanDetail] = useState({});
+
+  // Service speed (Durasi Pengerjaan) — applies to Kiloan, Satuan, Sepatu.
+  // Showcase keeps its flat retail price (no speed tier).
+  const [speedTier, setSpeedTier] = useState("reguler"); // 'reguler' | 'flash' | 'express'
 
   // Other tabs
   const [satuanCounts, setSatuanCounts] = useState({});
@@ -284,6 +313,29 @@ export default function POSScreen() {
   const isMember = sumberOrder === "kosan";
   const discountRate = isMember ? 0.1 : 0;
 
+  // Map POS source → backend price column.
+  // walkin & anter → general public (umum); tamel → outlet partner; kosan → member.
+  const SOURCE_PRICE_COL = {
+    walkin: "umum",
+    tamel: "tamel",
+    anter: "umum",
+    kosan: "member",
+  };
+  const sourcePriceCol = SOURCE_PRICE_COL[sumberOrder] || "umum";
+
+  // Active speed-tier definition (Reguler / Flash / Express).
+  const speedTierDef =
+    SPEED_TIERS.find((t) => t.id === speedTier) || SPEED_TIERS[0];
+  const speedMultiplier = speedTierDef.multiplier;
+
+  // Kiloan rate (per kg) — read from backend by speed tier + source column.
+  // Fallback to hardcoded KILOAN_PRICE if backend data not yet loaded.
+  const kiloanRow = livePrices?.[`kiloan_${speedTier}`];
+  const kiloanRate =
+    kiloanRow && typeof kiloanRow[sourcePriceCol] === "number"
+      ? kiloanRow[sourcePriceCol]
+      : KILOAN_PRICE;
+
   // Adjust kiloan when source changes — but only if customer is ALREADY doing
   // Kiloan (>0). Allow standalone Satuan / Sepatu / Showcase orders with 0 kg.
   useEffect(() => {
@@ -359,20 +411,21 @@ export default function POSScreen() {
   };
 
   const subtotal = useMemo(() => {
-    let sum = kiloanKg * KILOAN_PRICE;
+    let sum = kiloanKg * kiloanRate;
     SATUAN_ITEMS.forEach((i) => {
-      sum += (satuanCounts[i.id] || 0) * i.price;
+      sum += (satuanCounts[i.id] || 0) * i.price * speedMultiplier;
     });
     SEPATU_ITEMS.forEach((i) => {
-      sum += (sepatuCounts[i.id] || 0) * i.price;
+      sum += (sepatuCounts[i.id] || 0) * i.price * speedMultiplier;
     });
     SHOWCASE_ITEMS.forEach((i) => {
+      // Showcase keeps its flat retail price (no speed tier).
       sum += (showcaseCounts[i.id] || 0) * i.price;
     });
     return sum;
-  }, [kiloanKg, satuanCounts, sepatuCounts, showcaseCounts]);
+  }, [kiloanKg, kiloanRate, satuanCounts, sepatuCounts, showcaseCounts, speedMultiplier]);
 
-  const kiloanCost = kiloanKg * KILOAN_PRICE;
+  const kiloanCost = kiloanKg * kiloanRate;
   const usingMembership = !!activeMember && kiloanKg > 0;
   // Auto-deduct: if active member, kiloan cost is covered by quota
   const membershipDeduction = usingMembership ? kiloanCost : 0;
@@ -486,7 +539,10 @@ export default function POSScreen() {
     // sees it in the "Menunggu di Outlet" list with the right address + WA.
     if (sumberOrder === "anter") {
       const itemsLabelParts = [];
-      if (kiloanKg > 0) itemsLabelParts.push(`${kiloanKg.toFixed(1)} kg Kiloan`);
+      if (kiloanKg > 0)
+        itemsLabelParts.push(
+          `${kiloanKg.toFixed(1)} kg Kiloan ${SPEED_TIER_LABEL[speedTier] || ""}`.trim()
+        );
       const satuanCount = Object.values(satuanCounts).reduce((a, b) => a + b, 0);
       if (satuanCount > 0) itemsLabelParts.push(`${satuanCount} pcs Satuan`);
       const sepatuCount = Object.values(sepatuCounts).reduce((a, b) => a + b, 0);
@@ -516,10 +572,19 @@ export default function POSScreen() {
       kosan: "Kosan",
     };
     const itemsSummary = [];
-    if (kiloanKg > 0) itemsSummary.push(`${kiloanKg.toFixed(1)}kg kiloan`);
-    Object.entries(satuanCounts).forEach(([k, v]) => { if (v > 0) itemsSummary.push(`${v}× ${k}`); });
-    Object.entries(sepatuCounts).forEach(([k, v]) => { if (v > 0) itemsSummary.push(`${v}× ${k}`); });
-    Object.entries(showcaseCounts).forEach(([k, v]) => { if (v > 0) itemsSummary.push(`${v}× ${k}`); });
+    const speedLabel = SPEED_TIER_LABEL[speedTier] || speedTier;
+    if (kiloanKg > 0) {
+      itemsSummary.push(`Cuci Kiloan - ${speedLabel} - ${kiloanKg.toFixed(1)}kg`);
+    }
+    Object.entries(satuanCounts).forEach(([k, v]) => {
+      if (v > 0) itemsSummary.push(`${v}× ${k} (${speedLabel})`);
+    });
+    Object.entries(sepatuCounts).forEach(([k, v]) => {
+      if (v > 0) itemsSummary.push(`${v}× ${k} (${speedLabel})`);
+    });
+    Object.entries(showcaseCounts).forEach(([k, v]) => {
+      if (v > 0) itemsSummary.push(`${v}× ${k}`); // Showcase: no speed tier
+    });
 
     const payload = {
       order_id: id,
@@ -563,6 +628,7 @@ export default function POSScreen() {
     setPaymentStatus("lunas");
     setPaymentProof(null);
     setQrOpen(false);
+    setSpeedTier("reguler");
   };
 
   const qrPayload = JSON.stringify({
@@ -924,6 +990,83 @@ export default function POSScreen() {
           </div>
         </section>
 
+        {/* Durasi Pengerjaan — service speed selector. Applies to Kiloan,
+            Satuan & Sepatu. Showcase items keep flat retail price. */}
+        <section
+          className="animate-fade-up space-y-2"
+          style={{ animationDelay: "100ms" }}
+          data-testid="speed-tier-section"
+        >
+          <div className="flex items-center justify-between">
+            <label className="text-white/50 text-xs uppercase tracking-widest font-medium">
+              Durasi Pengerjaan
+            </label>
+            <span className="text-white/30 text-[10px] uppercase tracking-widest">
+              Wajib pilih
+            </span>
+          </div>
+          <div
+            className="glass rounded-2xl p-1.5 grid grid-cols-3 gap-1"
+            role="radiogroup"
+            aria-label="Pilih durasi pengerjaan"
+          >
+            {SPEED_TIERS.map((tier) => {
+              const Icon =
+                tier.id === "reguler" ? Timer : tier.id === "flash" ? Zap : Hourglass;
+              const active = speedTier === tier.id;
+              return (
+                <button
+                  key={tier.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => setSpeedTier(tier.id)}
+                  data-testid={`speed-tier-${tier.id}`}
+                  className={`relative h-14 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all active:scale-[0.97] ${
+                    active
+                      ? "text-black font-extrabold shadow-[0_4px_18px_rgba(0,0,0,0.4)]"
+                      : "text-white/60 hover:text-white hover:bg-white/5"
+                  }`}
+                  style={
+                    active
+                      ? {
+                          backgroundColor: tier.accent,
+                          boxShadow: `0 0 20px ${tier.accent}55`,
+                        }
+                      : undefined
+                  }
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Icon size={14} strokeWidth={2.5} />
+                    <span className="font-heading text-sm tracking-tight">
+                      {tier.label}
+                    </span>
+                  </div>
+                  <span
+                    className={`text-[10px] tracking-wider ${
+                      active ? "text-black/70" : "text-white/40"
+                    }`}
+                  >
+                    {tier.sub}
+                    {tier.multiplier > 1 ? ` · ×${tier.multiplier}` : ""}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <div
+            className="text-white/40 text-[11px]"
+            data-testid="speed-tier-hint"
+          >
+            {speedTier === "reguler"
+              ? "Tarif standar — selesai dalam 3 hari kerja."
+              : speedTier === "flash"
+                ? "Prioritas Flash — selesai dalam 1 hari (Satuan & Sepatu ×1.5)."
+                : "Express kilat — selesai dalam 5 jam (Satuan & Sepatu ×2.0)."}{" "}
+            Tarif Showcase tidak terpengaruh.
+          </div>
+        </section>
+
         {/* Tabs */}
         <section className="animate-fade-up" style={{ animationDelay: "120ms" }}>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -980,7 +1123,10 @@ export default function POSScreen() {
                         Tambah Cuci Kiloan
                       </div>
                       <div className="text-white/40 text-[11px] mt-0.5">
-                        Mulai {minKg.toFixed(1)} kg · {formatIDR(KILOAN_PRICE)}/kg
+                        Mulai {minKg.toFixed(1)} kg · {formatIDR(kiloanRate)}/kg ·{" "}
+                        <span style={{ color: speedTierDef.accent }}>
+                          {speedTierDef.label}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -995,13 +1141,18 @@ export default function POSScreen() {
                       Cuci Kiloan
                     </h3>
                     <span className="text-[#FFD700] font-semibold text-sm">
-                      {formatIDR(KILOAN_PRICE)}/kg
+                      {formatIDR(kiloanRate)}/kg
                     </span>
                   </div>
                   <p className="text-white/50 text-xs mb-5">
-                    Atur berat cucian · min {minKg.toFixed(1)} kg · tekan{" "}
-                    <span className="text-[#FFD700]/80">−</span> sampai 0 untuk
-                    membatalkan
+                    Atur berat cucian · min {minKg.toFixed(1)} kg ·{" "}
+                    <span
+                      className="font-semibold"
+                      style={{ color: speedTierDef.accent }}
+                      data-testid="kiloan-active-speed-label"
+                    >
+                      {speedTierDef.label} ({speedTierDef.sub})
+                    </span>
                   </p>
                   <div className="flex items-center justify-between gap-3">
                     <CounterBtn
@@ -1047,7 +1198,7 @@ export default function POSScreen() {
                       className="font-heading font-bold text-white text-lg"
                       data-testid="kiloan-subtotal"
                     >
-                      {formatIDR(kiloanKg * KILOAN_PRICE)}
+                      {formatIDR(kiloanKg * kiloanRate)}
                     </span>
                   </div>
                 </div>
@@ -1160,6 +1311,7 @@ export default function POSScreen() {
                   onInc={() => bumpCount(setSatuanCounts)(item.id, 1)}
                   onDec={() => bumpCount(setSatuanCounts)(item.id, -1)}
                   idx={i}
+                  multiplier={speedMultiplier}
                 />
               ))}
             </TabsContent>
@@ -1172,6 +1324,7 @@ export default function POSScreen() {
                   onInc={() => bumpCount(setSepatuCounts)(item.id, 1)}
                   onDec={() => bumpCount(setSepatuCounts)(item.id, -1)}
                   idx={i}
+                  multiplier={speedMultiplier}
                 />
               ))}
             </TabsContent>

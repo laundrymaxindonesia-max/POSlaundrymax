@@ -1,0 +1,33 @@
+{
+  "summary": "P0 Service Speed (Durasi Pengerjaan) feature fully verified — backend 9/9 new + 82/82 regression GREEN, frontend POS speed-tier UI + multipliers + items_detail save + Admin 4-tier pricing UI all GREEN. The Durasi Pengerjaan pill section renders above tabs with 3 pills (Reguler default / Flash / Express). Cuci Kiloan rate updates correctly across speed tiers AND across source columns (Walk-in→umum 7000/10000/18500, Tamel→8000/12000/20000). Satuan & Sepatu apply ×1.5 (Flash) / ×2.0 (Express) on item-row prices and subtotals. Showcase prices remain flat across all tiers (verified Rp 20.000 unchanged). POS save flow persists items_detail with the speed label correctly: a Walk-in / Flash / 3kg order produced items_detail='Cuci Kiloan - Flash (1 Hari) - 3.0kg' and total_price=30000. Admin /admin → Pengaturan Harga renders the new 4-column table (Harga Umum / Tamel / Laskita / Kostunpad) with all 8 rows (3 kiloan_* + satuan/sepatu/jas/karpet/showcase), shows '4 TIER AKTIF' badge, and SIMPAN PERUBAHAN HARGA round-trip persists umum changes (verified 7000→7100 flow, then re-seeded). Final POST /api/seed/all called to restore canonical data.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_speed_tier_pricing.py",
+    "/app/test_reports/pytest/iter21_speed_tier.xml",
+    "/app/test_reports/pytest/iter21_full.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Price model now uses `service_id: str` (was Literal) — correct relaxation since speed-tier rows are dynamic (kiloan_reguler/flash/express). Backward-compat ServiceId alias retained.",
+    "Price.umum field correctly defaults to 0 (ge=0) so older payloads without umum still validate; the Admin SIMPAN payload always includes umum so this is just a safety net.",
+    "POS items_detail formatting embeds the human-readable speed label (e.g. 'Flash (1 Hari)'). Note: server seed.py passes `items_detail=None` for kiloan dummy orders, so this label only appears on user-created orders — fine, but if you ever generate analytics from items_detail strings, parse defensively.",
+    "Showcase tier exemption is implemented client-side only (multiplier hard-coded to 1.0 for showcase tab). If a future product changes this, the rule lives in /app/frontend/src/components/POSScreen.jsx — consider centralising in pos/data.js next to SPEED_TIERS.",
+    "Admin pricing UI uses 64 numeric inputs (8 rows × 4 tier columns × 2? actually 32) — verified count=64 includes the qty-formatted display masks. SIMPAN payload still hits POST /api/prices/bulk which delete_many+insert_many atomically, so partial-write risk is nil.",
+    "Bulk endpoint accepts label/unit/umum/tamel/laskita/member but does NOT validate service_id uniqueness. A buggy admin payload with duplicate service_ids would persist both rows. Low-risk (only Admin-authenticated UI hits this) but worth a future PydanticValidator."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_speed_tier_pricing.py — NEW: 9 tests covering seed contract (2), GET schema with umum/4-tier/kiloan-tier check (5), bulk round-trip (1), and items_detail speed-label persistence (1). All pass."
+  ],
+  "success_rate": {"backend": "100% (9/9 new + 82/82 regression)", "frontend": "100% (Speed pills, Kiloan rate × source × tier matrix, Satuan/Sepatu multipliers, Showcase exemption, POS save with items_detail label, Admin 4-tier pricing render + save round-trip — all verified)"},
+  "test_credentials": "Staff PIN 1234 (sessionStorage bypass used). Admin OAuth simulated via /app/auth_testing.md fake-session pattern (cookie session_token).",
+  "seed_data_creation": "POST /api/seed/all called at end of testing to restore canonical data. One TEST_SpeedFlow order LND-260506070929-153 was created during UI save verification — wiped by the final seed. No persistent test pollution.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest backend/tests/test_speed_tier_pricing.py -v` for fast P0 speed-tier regression. Frontend testids: speed-tier-section, speed-tier-{reguler,flash,express}, tab-{kiloan,satuan,sepatu-karpet,showcase}, kiloan-add-button, kiloan-manual-input, payment-nanti, save-print-button. To bypass StaffPinGate set sessionStorage.staff_pin_ok='true' BEFORE navigation via add_init_script. To reach /admin without real Google OAuth: insert a fake user+session into mongo per /app/auth_testing.md, then add cookie session_token. Walk-in source uses umum prices; Tamel/Laskita/Kostunpad use their respective columns. Showcase tab is the only category exempt from speed multipliers — verify any future tab additions explicitly.",
+  "rca of the issue": "No issues found. All P0 acceptance criteria met. The feature is production-ready: schema migration is backward-compatible (umum defaults to 0), UI cleanly toggles between tiers and sources, items_detail string format makes the speed selection auditable post-save, and Admin can adjust any of the 32 price cells (8 rows × 4 tiers) and round-trip-save successfully."
+}

@@ -211,3 +211,36 @@ export const TIER_STYLE = {
 
 export const formatIDR = (n) =>
   "Rp " + Math.round(n).toLocaleString("id-ID").replace(/,/g, ".");
+
+// Service speed tiers (Durasi Pengerjaan).
+// `multiplier` is applied to Satuan & Sepatu base prices client-side.
+// For Kiloan, the price is read directly from the backend (one row per tier).
+export const SPEED_TIERS = [
+  {
+    id: "reguler",
+    label: "Reguler",
+    sub: "3 hari",
+    multiplier: 1.0,
+    accent: "#FFD700",
+  },
+  {
+    id: "flash",
+    label: "Flash",
+    sub: "1 hari",
+    multiplier: 1.5,
+    accent: "#7DF08F",
+  },
+  {
+    id: "express",
+    label: "Express",
+    sub: "5 jam",
+    multiplier: 2.0,
+    accent: "#FF6B6B",
+  },
+];
+
+export const SPEED_TIER_LABEL = {
+  reguler: "Reguler (3 Hari)",
+  flash: "Flash (1 Hari)",
+  express: "Express (5 Jam)",
+};

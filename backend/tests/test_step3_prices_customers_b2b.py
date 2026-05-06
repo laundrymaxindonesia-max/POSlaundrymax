@@ -33,42 +33,46 @@ def test_seed_all_returns_expected_counts(client):
     assert r.status_code == 200, r.text
     j = r.json()
     assert j["orders"]["inserted"] == 35
-    assert j["prices"]["inserted"] == 6
+    assert j["prices"]["inserted"] == 8
     assert j["customers"]["inserted"] == 5
     assert j["b2b_quotas"]["inserted"] == 4
 
 
 # ------------- Prices -------------
-def test_get_prices_returns_six_canonical_rows(client):
+def test_get_prices_returns_canonical_rows(client):
     r = client.get(f"{API}/prices", timeout=10)
     assert r.status_code == 200
     rows = r.json()
-    assert len(rows) == 6
+    assert len(rows) == 8
+    # (label, unit, umum, tamel, laskita, member)
     expected = {
-        "kiloan":   ("Cuci Kiloan",                "/kg",  6000, 7500, 5400),
-        "satuan":   ("Satuan (Kemeja/Celana)",     "/pcs", 15000, 18000, 13500),
-        "jas":      ("Jas / Coat",                 "/pcs", 25000, 30000, 22500),
-        "sepatu":   ("Sepatu",                     "/pcs", 30000, 35000, 27000),
-        "karpet":   ("Karpet",                     "/m²",  30000, 35000, 27000),
-        "showcase": ("Showcase (Gas/Air)",         "/pcs", 20000, 22000, 18000),
+        "kiloan_reguler": ("Cuci Kiloan — Reguler (3 hari)", "/kg",  7000,  8000,  8000,  8000),
+        "kiloan_flash":   ("Cuci Kiloan — Flash (1 hari)",   "/kg",  10000, 12000, 12000, 12000),
+        "kiloan_express": ("Cuci Kiloan — Express (5 jam)",  "/kg",  18500, 20000, 20000, 20000),
+        "satuan":   ("Satuan (Kemeja/Celana)",     "/pcs", 15000, 15000, 18000, 13500),
+        "sepatu":   ("Sepatu",                     "/pcs", 30000, 30000, 35000, 27000),
+        "jas":      ("Jas / Coat",                 "/pcs", 25000, 25000, 30000, 22500),
+        "karpet":   ("Karpet",                     "/m²",  30000, 30000, 35000, 27000),
+        "showcase": ("Showcase (Gas/Air)",         "/pcs", 20000, 20000, 22000, 18000),
     }
     by_id = {r["service_id"]: r for r in rows}
-    for sid, (label, unit, t, l, m) in expected.items():
+    for sid, (label, unit, umum, tamel, laskita, member) in expected.items():
         assert sid in by_id, f"missing {sid}"
         row = by_id[sid]
         assert row["label"] == label
         assert row["unit"] == unit
-        assert row["tamel"] == t
-        assert row["laskita"] == l
-        assert row["member"] == m
+        assert row["umum"] == umum
+        assert row["tamel"] == tamel
+        assert row["laskita"] == laskita
+        assert row["member"] == member
 
 
 def test_prices_bulk_replace_then_reseed(client):
     payload = [
-        {"service_id": "kiloan", "label": "Cuci Kiloan", "unit": "/kg",
-         "tamel": 1234, "laskita": 2345, "member": 3456},
+        {"service_id": "kiloan_reguler", "label": "Cuci Kiloan", "unit": "/kg",
+         "umum": 999, "tamel": 1234, "laskita": 2345, "member": 3456},
         {"service_id": "jas", "label": "Jas / Coat", "unit": "/pcs",
-         "tamel": 11111, "laskita": 22222, "member": 33333},
+         "umum": 9999, "tamel": 11111, "laskita": 22222, "member": 33333},
     ]
     r = client.post(f"{API}/prices/bulk", json=payload, timeout=10)
     assert r.status_code == 200, r.text
@@ -77,12 +81,12 @@ def test_prices_bulk_replace_then_reseed(client):
     g = client.get(f"{API}/prices").json()
     assert len(g) == 2
     sids = sorted([row["service_id"] for row in g])
-    assert sids == ["jas", "kiloan"]
+    assert sids == ["jas", "kiloan_reguler"]
 
     # restore
     rs = client.post(f"{API}/seed/prices")
     assert rs.status_code == 200
-    assert rs.json()["inserted"] == 6
+    assert rs.json()["inserted"] == 8
 
 
 def test_prices_bulk_invalid_missing_field(client):
@@ -99,11 +103,20 @@ def test_prices_bulk_invalid_negative(client):
     assert r.status_code == 422
 
 
-def test_prices_bulk_invalid_service_id(client):
-    bad = [{"service_id": "Foobar", "label": "x", "unit": "/kg",
-            "tamel": 1, "laskita": 2, "member": 3}]
-    r = client.post(f"{API}/prices/bulk", json=bad)
+def test_prices_bulk_accepts_arbitrary_service_id(client):
+    """service_id is now `str` (was Literal) to allow new categories like
+    `kiloan_reguler` / `kiloan_flash` / `kiloan_express` without bumping the
+    Pydantic model. Empty string still rejected via min_length=1."""
+    custom = [{"service_id": "future_premium", "label": "Premium", "unit": "/kg",
+               "umum": 1, "tamel": 2, "laskita": 3, "member": 4}]
+    r = client.post(f"{API}/prices/bulk", json=custom)
+    assert r.status_code == 200, r.text
+
+    bad_empty = [{"service_id": "", "label": "x", "unit": "/kg",
+                  "umum": 0, "tamel": 1, "laskita": 2, "member": 3}]
+    r = client.post(f"{API}/prices/bulk", json=bad_empty)
     assert r.status_code == 422
+
     # Re-seed to make sure prices are consistent
     client.post(f"{API}/seed/prices")
 

@@ -94,12 +94,14 @@ const STAFF_PERFORMANCE = [
 ];
 
 const INITIAL_PRICES = [
-  { id: "kiloan", label: "Cuci Kiloan", unit: "/kg", tamel: 6000, laskita: 7500, member: 5400 },
-  { id: "satuan", label: "Satuan (Kemeja/Celana)", unit: "/pcs", tamel: 15000, laskita: 18000, member: 13500 },
-  { id: "jas", label: "Jas / Coat", unit: "/pcs", tamel: 25000, laskita: 30000, member: 22500 },
-  { id: "sepatu", label: "Sepatu", unit: "/pcs", tamel: 30000, laskita: 35000, member: 27000 },
-  { id: "karpet", label: "Karpet", unit: "/m²", tamel: 30000, laskita: 35000, member: 27000 },
-  { id: "showcase", label: "Showcase (Gas/Air)", unit: "/pcs", tamel: 20000, laskita: 22000, member: 18000 },
+  { id: "kiloan_reguler", label: "Cuci Kiloan — Reguler (3 hari)", unit: "/kg",  umum: 7000,  tamel: 8000,  laskita: 8000,  member: 8000 },
+  { id: "kiloan_flash",   label: "Cuci Kiloan — Flash (1 hari)",   unit: "/kg",  umum: 10000, tamel: 12000, laskita: 12000, member: 12000 },
+  { id: "kiloan_express", label: "Cuci Kiloan — Express (5 jam)",  unit: "/kg",  umum: 18500, tamel: 20000, laskita: 20000, member: 20000 },
+  { id: "satuan",   label: "Satuan (Kemeja/Celana)",     unit: "/pcs", umum: 15000, tamel: 15000, laskita: 18000, member: 13500 },
+  { id: "sepatu",   label: "Sepatu",                     unit: "/pcs", umum: 30000, tamel: 30000, laskita: 35000, member: 27000 },
+  { id: "jas",      label: "Jas / Coat",                 unit: "/pcs", umum: 25000, tamel: 25000, laskita: 30000, member: 22500 },
+  { id: "karpet",   label: "Karpet",                     unit: "/m²",  umum: 30000, tamel: 30000, laskita: 35000, member: 27000 },
+  { id: "showcase", label: "Showcase (Gas/Air)",         unit: "/pcs", umum: 20000, tamel: 20000, laskita: 22000, member: 18000 },
 ];
 
 const STAFF_REPORTS = [
@@ -427,6 +429,7 @@ function PricingView() {
           service_id: p.service_id,
           label: p.label,
           unit: p.unit,
+          umum: p.umum ?? 0,
           tamel: p.tamel,
           laskita: p.laskita,
           member: p.member,
@@ -460,6 +463,7 @@ function PricingView() {
         service_id: p.service_id || p.id,
         label: p.label,
         unit: p.unit,
+        umum: p.umum ?? 0,
         tamel: p.tamel,
         laskita: p.laskita,
         member: p.member,
@@ -471,7 +475,7 @@ function PricingView() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       toast.success("Perubahan harga tersimpan", {
-        description: `${prices.length} kategori diperbarui untuk Tamel / Laskita / Kostunpad.`,
+        description: `${prices.length} kategori diperbarui untuk Umum / Tamel / Laskita / Kostunpad.`,
       });
     } catch (e) {
       toast.error("Gagal menyimpan harga", { description: e.message });
@@ -491,7 +495,8 @@ function PricingView() {
             Pengaturan Harga
           </h1>
           <p className="text-white/50 text-sm mt-1">
-            Multi-tier pricing untuk segmen Tamel, Laskita, dan Member Kostunpad.
+            Multi-tier pricing untuk segmen Umum, Tamel, Laskita, dan Member Kostunpad.
+            Cuci Kiloan dipisah per durasi pengerjaan: Reguler / Flash / Express.
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs">
@@ -505,7 +510,7 @@ function PricingView() {
             {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
           </button>
           <span className="px-2.5 py-1 rounded-full bg-[#FFD700]/15 border border-[#FFD700]/30 text-[#FFD700] font-heading font-bold uppercase tracking-widest">
-            3 Tier Aktif
+            4 Tier Aktif
           </span>
         </div>
       </div>
@@ -530,13 +535,16 @@ function PricingView() {
               <th className="px-5 py-4 text-white/50 text-xs uppercase tracking-widest font-heading font-bold">
                 Kategori
               </th>
-              <th className="px-3 py-4 text-white/50 text-xs uppercase tracking-widest font-heading font-bold w-40">
+              <th className="px-3 py-4 text-white/50 text-xs uppercase tracking-widest font-heading font-bold w-32">
+                Harga Umum
+              </th>
+              <th className="px-3 py-4 text-white/50 text-xs uppercase tracking-widest font-heading font-bold w-32">
                 Harga Tamel
               </th>
-              <th className="px-3 py-4 text-white/50 text-xs uppercase tracking-widest font-heading font-bold w-40">
+              <th className="px-3 py-4 text-white/50 text-xs uppercase tracking-widest font-heading font-bold w-32">
                 Harga Laskita
               </th>
-              <th className="px-3 py-4 text-white/50 text-xs uppercase tracking-widest font-heading font-bold w-40">
+              <th className="px-3 py-4 text-white/50 text-xs uppercase tracking-widest font-heading font-bold w-32">
                 Harga Kostunpad
               </th>
               <th className="px-3 py-4 w-12"></th>
@@ -555,7 +563,7 @@ function PricingView() {
                   </div>
                   <div className="text-white/40 text-[11px]">{row.unit}</div>
                 </td>
-                {["tamel", "laskita", "member"].map((tier) => (
+                {["umum", "tamel", "laskita", "member"].map((tier) => (
                   <td key={tier} className="px-3 py-3.5">
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-xs">
@@ -564,7 +572,7 @@ function PricingView() {
                       <input
                         type="text"
                         inputMode="numeric"
-                        value={row[tier].toLocaleString("id-ID").replace(/,/g, ".")}
+                        value={(row[tier] ?? 0).toLocaleString("id-ID").replace(/,/g, ".")}
                         onChange={(e) => updatePrice(row.id, tier, e.target.value)}
                         data-testid={`pricing-input-${row.id}-${tier}`}
                         className="w-full h-10 pl-9 pr-3 rounded-lg bg-[#0a0a0a] border border-white/10 hover:border-white/20 focus:border-[#FFD700] focus:outline-none text-white font-mono text-sm transition-colors"
@@ -599,8 +607,8 @@ function PricingView() {
                 <div className="text-white/40 text-[11px]">{row.unit}</div>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              {["tamel", "laskita", "member"].map((tier) => (
+            <div className="grid grid-cols-2 gap-2">
+              {["umum", "tamel", "laskita", "member"].map((tier) => (
                 <div key={tier}>
                   <label className="text-white/40 text-[10px] uppercase tracking-wider font-medium">
                     {tier === "member" ? "Kostunpad" : tier}
@@ -612,7 +620,7 @@ function PricingView() {
                     <input
                       type="text"
                       inputMode="numeric"
-                      value={row[tier].toLocaleString("id-ID").replace(/,/g, ".")}
+                      value={(row[tier] ?? 0).toLocaleString("id-ID").replace(/,/g, ".")}
                       onChange={(e) => updatePrice(row.id, tier, e.target.value)}
                       className="w-full h-10 pl-7 pr-2 rounded-lg bg-[#0a0a0a] border border-white/10 focus:border-[#FFD700] focus:outline-none text-white font-mono text-xs"
                     />

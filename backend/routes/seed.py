@@ -140,13 +140,23 @@ async def _seed_orders() -> Dict[str, int]:
 
 
 # ---------------- PRICES ----------------
+# NOTE: The four columns are: Umum (Walk-in), Tamel, Laskita, Member (Kostunpad).
+# Per business rules: LASKITA & KOSTUNPAD copy the TAMEL price exactly for kiloan.
+# Speed tiers (Reguler / Flash / Express) only apply to Cuci Kiloan as separate
+# rows. Satuan & Sepatu use a single base row + client-side multiplier
+# (Flash = base × 1.5, Express = base × 2.0). Showcase has no speed tier.
 _DEFAULT_PRICES = [
-    {"service_id": "kiloan",   "label": "Cuci Kiloan",                "unit": "/kg",  "tamel": 6000,  "laskita": 7500,  "member": 5400},
-    {"service_id": "satuan",   "label": "Satuan (Kemeja/Celana)",     "unit": "/pcs", "tamel": 15000, "laskita": 18000, "member": 13500},
-    {"service_id": "jas",      "label": "Jas / Coat",                 "unit": "/pcs", "tamel": 25000, "laskita": 30000, "member": 22500},
-    {"service_id": "sepatu",   "label": "Sepatu",                     "unit": "/pcs", "tamel": 30000, "laskita": 35000, "member": 27000},
-    {"service_id": "karpet",   "label": "Karpet",                     "unit": "/m²",  "tamel": 30000, "laskita": 35000, "member": 27000},
-    {"service_id": "showcase", "label": "Showcase (Gas/Air)",         "unit": "/pcs", "tamel": 20000, "laskita": 22000, "member": 18000},
+    # ---- Cuci Kiloan with speed tiers ---------------------------------
+    {"service_id": "kiloan_reguler", "label": "Cuci Kiloan — Reguler (3 hari)", "unit": "/kg",  "umum": 7000,  "tamel": 8000,  "laskita": 8000,  "member": 8000},
+    {"service_id": "kiloan_flash",   "label": "Cuci Kiloan — Flash (1 hari)",   "unit": "/kg",  "umum": 10000, "tamel": 12000, "laskita": 12000, "member": 12000},
+    {"service_id": "kiloan_express", "label": "Cuci Kiloan — Express (5 jam)",  "unit": "/kg",  "umum": 18500, "tamel": 20000, "laskita": 20000, "member": 20000},
+    # ---- Satuan / Sepatu base prices (multiplier applied client-side) -
+    {"service_id": "satuan",   "label": "Satuan (Kemeja/Celana)",     "unit": "/pcs", "umum": 15000, "tamel": 15000, "laskita": 18000, "member": 13500},
+    {"service_id": "sepatu",   "label": "Sepatu",                     "unit": "/pcs", "umum": 30000, "tamel": 30000, "laskita": 35000, "member": 27000},
+    # ---- No speed tier ------------------------------------------------
+    {"service_id": "jas",      "label": "Jas / Coat",                 "unit": "/pcs", "umum": 25000, "tamel": 25000, "laskita": 30000, "member": 22500},
+    {"service_id": "karpet",   "label": "Karpet",                     "unit": "/m²",  "umum": 30000, "tamel": 30000, "laskita": 35000, "member": 27000},
+    {"service_id": "showcase", "label": "Showcase (Gas/Air)",         "unit": "/pcs", "umum": 20000, "tamel": 20000, "laskita": 22000, "member": 18000},
 ]
 
 
