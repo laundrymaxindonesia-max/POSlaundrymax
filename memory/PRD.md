@@ -22,6 +22,15 @@ Mobile-first three-role ops app + Admin Command Center for a laundry business "L
 - **Superadmin** — monitor KPI, atur multi-tier pricing, lihat laporan pegawai, monitor kuota B2B.
 
 ## What's Been Implemented
+### P0 — Service Speed (Durasi Pengerjaan) — iter_21 100%
+Three-tier service speed pricing across DB, Admin, and POS.
+- **Schema**: `Price.service_id` relaxed to `str` (was Literal). Added `umum` (Walk-in / general public) column → 4 tier columns total (umum/tamel/laskita/member). Cuci Kiloan now stored as **3 separate rows** by speed: `kiloan_reguler`, `kiloan_flash`, `kiloan_express`. Satuan & Sepatu remain single base rows; Showcase keeps flat retail price (no speed tier).
+- **Seed prices** (per kg, IDR) — `kiloan_reguler` Umum 7000 / Tamel 8000 / Laskita 8000 / Member 8000 · `kiloan_flash` 10000/12000/12000/12000 · `kiloan_express` 18500/20000/20000/20000.
+- **Admin Pricing UI** (`/admin` → Pengaturan Harga): 4-column table renders 8 rows; `4 TIER AKTIF` badge; SIMPAN bulk-saves all 32 cells via `POST /api/prices/bulk`.
+- **POS UI** (`/`): `Durasi Pengerjaan` pill section above tabs (`speed-tier-section` / `speed-tier-{reguler,flash,express}`), default Reguler. Cuci Kiloan rate updates per `livePrices[kiloan_${speedTier}][sourcePriceCol]` (walkin/anter→umum, tamel→tamel, kosan→member). Satuan/Sepatu prices show ×1.5 (Flash) / ×2.0 (Express); Showcase exempt.
+- **Order payload**: `items_detail` includes the human-readable speed label, e.g. `"Cuci Kiloan - Flash (1 Hari) - 3.0kg, 1× kemeja (Flash (1 Hari))"`.
+- **Backend tests**: 9 new tests in `tests/test_speed_tier_pricing.py` — all pass; 82/82 regression GREEN.
+
 ### Segment 1 — Cashier POS (/) — iter_1, iter_5, iter_6, iter_7, iter_9, iter_10 100%
 4-tab order input + full UX overhaul + membership + regular customer save. **REFACTORED (iter_10)** from ~1921 → 1280 lines:
 - Extracted to `/components/pos/`: `data.js` (all constants), `MembershipModal.jsx`, `RegularCustomerModal.jsx`, `TrackingModal.jsx` (+ TrackingProgress), `QrReceiptModal.jsx`. Parent passes state + setters + callbacks as props.
