@@ -22,6 +22,13 @@ Mobile-first three-role ops app + Admin Command Center for a laundry business "L
 - **Superadmin** — monitor KPI, atur multi-tier pricing, lihat laporan pegawai, monitor kuota B2B.
 
 ## What's Been Implemented
+### MVP v1.0 — Deployment Ready — iter_23 100%
+Repository prepared for production deployment to MongoDB Atlas + Render/Railway (backend) + Vercel (frontend).
+- **`/app/DEPLOYMENT.md`** — full step-by-step owner-facing guide: Atlas setup, env-var contract, Render backend deploy, Vercel frontend deploy, CORS wiring, post-deploy smoke checklist, free-tier limits, troubleshooting matrix.
+- **`OWNER_EMAILS` is now env-configurable** in `backend/routes/auth.py` (defaults to `theomahrizal@gmail.com`; comma-separated multi-owner supported via env). All other config (`MONGO_URL`, `DB_NAME`, `CORS_ORIGINS`, `REACT_APP_BACKEND_URL`) was already env-driven.
+- **No hardcoded local URLs/URIs in app code** — only test files reference `mongodb://localhost:27017` (which is correct — they fall back via `os.environ.get`).
+- 82/82 backend tests still GREEN after the auth refactor.
+
 ### P1 — Component Refactor — iter_22 100%
 Large parent components split into focused single-responsibility files. **No behavioral change**; all data-testids preserved; backend 82/82 GREEN; frontend regression GREEN via testing agent.
 - **POSScreen.jsx**: 1670 → **1112 lines** (~33% reduction). Extracted into `/components/pos/`:

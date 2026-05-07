@@ -11,6 +11,7 @@ Staff flow (kiosk PIN):
 
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -22,7 +23,13 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from db import db, staff_col
 
 # Whitelist of Google emails allowed to authenticate as Owner/Superadmin.
-OWNER_EMAILS = {"theomahrizal@gmail.com"}
+# Configurable via OWNER_EMAILS env var (comma-separated). Defaults to the
+# original single-owner setup so local dev keeps working without env config.
+OWNER_EMAILS = {
+    e.strip().lower()
+    for e in os.environ.get("OWNER_EMAILS", "theomahrizal@gmail.com").split(",")
+    if e.strip()
+}
 
 EMERGENT_SESSION_ENDPOINT = (
     "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
