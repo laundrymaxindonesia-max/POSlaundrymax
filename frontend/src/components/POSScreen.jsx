@@ -1,43 +1,22 @@
 import { useState, useMemo, useEffect } from "react";
 import {
-  Minus,
-  Plus,
   Camera,
   QrCode,
-  User,
   Shirt,
-  Scale,
-  Footprints,
-  ShoppingBag,
   X,
   CheckCircle2,
   Search,
-  Package,
-  ChevronDown,
-  ChevronUp,
   Wallet,
   Clock,
   Receipt,
-  Calendar,
   Trash2,
   Sparkles,
   Crown,
   Star,
-  MapPin,
-  Phone,
-  NotebookPen,
-  Zap,
   Timer,
   Hourglass,
+  Zap,
 } from "lucide-react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -61,12 +40,9 @@ import {
   SATUAN_ITEMS,
   SEPATU_ITEMS,
   SHOWCASE_ITEMS,
-  KILOAN_DETAIL_ITEMS,
   SOURCE_OPTIONS,
   MOCK_ORDERS,
-  STAGES,
   INITIAL_MEMBERS,
-  TIER_STYLE,
   formatIDR,
   SPEED_TIERS,
   SPEED_TIER_LABEL,
@@ -75,77 +51,11 @@ import MembershipModal from "@/components/pos/MembershipModal";
 import RegularCustomerModal from "@/components/pos/RegularCustomerModal";
 import TrackingModal from "@/components/pos/TrackingModal";
 import QrReceiptModal from "@/components/pos/QrReceiptModal";
+import CustomerSelection from "@/components/pos/CustomerSelection";
+import OrderSource from "@/components/pos/OrderSource";
+import ServiceTabs from "@/components/pos/ServiceTabs";
+import CartSummary from "@/components/pos/CartSummary";
 
-
-const CounterBtn = ({ onClick, children, testid, variant = "default", disabled = false }) => (
-  <button
-    onClick={onClick}
-    data-testid={testid}
-    disabled={disabled}
-    className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 active:scale-90 disabled:opacity-40 disabled:cursor-not-allowed ${
-      variant === "primary"
-        ? "bg-[#FFD700] text-black hover:bg-[#ffdf33] shadow-[0_0_20px_rgba(255,215,0,0.35)]"
-        : "bg-white/5 text-white border border-white/10 hover:bg-white/10 hover:border-[#FFD700]/40"
-    }`}
-  >
-    {children}
-  </button>
-);
-
-const ItemRow = ({ item, count, onInc, onDec, idx, multiplier = 1 }) => {
-  const effectivePrice = Math.round(item.price * multiplier);
-  return (
-    <div
-      className="glass rounded-2xl p-4 flex items-center justify-between animate-fade-up"
-      style={{ animationDelay: `${idx * 40}ms` }}
-      data-testid={`item-row-${item.id}`}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="font-heading font-semibold text-white text-lg truncate">
-          {item.name}
-        </div>
-        <div className="text-white/50 text-xs mt-0.5">
-          {multiplier !== 1 ? (
-            <>
-              <span className="line-through text-white/30 mr-1">
-                {formatIDR(item.price)}
-              </span>
-              <span
-                className="text-[#FFD700] font-semibold"
-                data-testid={`item-price-${item.id}`}
-              >
-                {formatIDR(effectivePrice)}
-              </span>{" "}
-              <span className="text-white/40">/ pcs</span>
-            </>
-          ) : (
-            <span data-testid={`item-price-${item.id}`}>
-              {formatIDR(effectivePrice)} / pcs
-            </span>
-          )}
-        </div>
-      </div>
-      <div className="flex items-center gap-3 ml-2">
-        <CounterBtn onClick={onDec} testid={`item-counter-decrease-${item.id}`}>
-          <Minus size={18} />
-        </CounterBtn>
-        <div
-          className="min-w-[2rem] text-center font-heading font-bold text-2xl text-[#FFD700]"
-          data-testid={`item-count-${item.id}`}
-        >
-          {count}
-        </div>
-        <CounterBtn
-          onClick={onInc}
-          testid={`item-counter-increase-${item.id}`}
-          variant={count > 0 ? "primary" : "default"}
-        >
-          <Plus size={18} />
-        </CounterBtn>
-      </div>
-    </div>
-  );
-};
 
 export default function POSScreen() {
   // Customer
@@ -751,243 +661,37 @@ export default function POSScreen() {
       </header>
 
       <main className="px-5 pt-4 pb-44 space-y-4">
-        {/* Customer block */}
+        {/* Customer + Source */}
         <section className="animate-fade-up space-y-3" style={{ animationDelay: "60ms" }}>
-          <div>
-            <label className="text-white/50 text-xs uppercase tracking-widest mb-2 block font-medium">
-              Nama Pelanggan
-            </label>
-            <div className="relative">
-              <User
-                size={16}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-[#FFD700] pointer-events-none z-10"
-              />
-              <input
-                type="text"
-                value={customerName}
-                onChange={(e) => {
-                  setCustomerName(e.target.value);
-                  setCustomerSearchOpen(true);
-                }}
-                onFocus={() => setCustomerSearchOpen(true)}
-                onBlur={() =>
-                  setTimeout(() => setCustomerSearchOpen(false), 150)
-                }
-                placeholder="Masukkan nama pelanggan"
-                data-testid="customer-name-input"
-                autoComplete="off"
-                className="w-full h-14 pl-11 pr-4 rounded-2xl glass text-white placeholder-white/40 text-base font-medium focus:border-[#FFD700]/50 focus:outline-none transition-colors"
-              />
+          <CustomerSelection
+            customerName={customerName}
+            setCustomerName={setCustomerName}
+            customerSearchOpen={customerSearchOpen}
+            setCustomerSearchOpen={setCustomerSearchOpen}
+            customerSearchLoading={customerSearchLoading}
+            customerSearchResults={customerSearchResults}
+            pickCustomerFromSearch={pickCustomerFromSearch}
+            activeMember={activeMember}
+            customerProfile={customerProfile}
+            onOpenRegisterMember={() => {
+              setRegName(customerName || "");
+              setRegisterOpen(true);
+            }}
+            onOpenRegisterRegular={() => {
+              setRegCustName(customerName || "");
+              setRegCustWa("");
+              setRegCustAddress("");
+              setRegCustOpen(true);
+            }}
+          />
 
-              {customerSearchOpen &&
-                customerName.trim().length >= 2 && (
-                  <div
-                    className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 rounded-2xl border border-[#FFD700]/25 bg-[#0F0F0F] shadow-[0_20px_60px_rgba(0,0,0,0.7)] overflow-hidden"
-                    data-testid="customer-search-dropdown"
-                  >
-                    {customerSearchLoading && (
-                      <div className="px-4 py-3 text-white/50 text-xs flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full border-2 border-[#FFD700]/30 border-t-[#FFD700] animate-spin" />
-                        Mencari...
-                      </div>
-                    )}
-
-                    {!customerSearchLoading && customerSearchResults.length === 0 && (
-                      <div
-                        className="px-4 py-3 text-white/40 text-xs"
-                        data-testid="customer-search-empty"
-                      >
-                        Tidak ada pelanggan dengan nama / nomor itu. Lanjutkan
-                        ketik untuk pelanggan baru.
-                      </div>
-                    )}
-
-                    {!customerSearchLoading &&
-                      customerSearchResults.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => pickCustomerFromSearch(c)}
-                          data-testid={`customer-search-result-${c.id}`}
-                          className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-[#FFD700]/10 transition-colors border-b border-white/5 last:border-0"
-                        >
-                          <div
-                            className={`w-8 h-8 rounded-lg flex items-center justify-center font-heading font-black text-sm flex-shrink-0 ${
-                              c.type === "Member"
-                                ? "bg-[#FFD700]/15 text-[#FFD700] border border-[#FFD700]/30"
-                                : "bg-white/5 text-white/70 border border-white/10"
-                            }`}
-                          >
-                            {(c.name || "?").charAt(0).toUpperCase()}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="font-heading font-bold text-white text-sm truncate">
-                              {c.name}
-                            </div>
-                            <div className="text-white/50 text-[11px] flex items-center gap-1.5 truncate">
-                              <span className="font-mono">{c.phone}</span>
-                              {c.address && (
-                                <>
-                                  <span>·</span>
-                                  <span className="truncate">{c.address}</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          {c.type === "Member" && (
-                            <span className="px-2 py-0.5 rounded-full bg-[#FFD700]/15 border border-[#FFD700]/30 text-[#FFD700] text-[9px] font-heading font-bold uppercase tracking-wider flex-shrink-0">
-                              {c.member_tier || "Member"}
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                  </div>
-                )}
-            </div>
-
-            {/* Membership Active Badge */}
-            {activeMember && (
-              <div
-                className={`mt-2 rounded-2xl border p-3 animate-fade-up ${TIER_STYLE[activeMember.tier].bg} ${TIER_STYLE[activeMember.tier].border}`}
-                data-testid="member-active-badge"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div
-                    className={`w-9 h-9 rounded-xl border flex items-center justify-center flex-shrink-0 ${TIER_STYLE[activeMember.tier].badge}`}
-                  >
-                    {activeMember.tier === "Platinum" ? (
-                      <Crown size={16} strokeWidth={2.25} />
-                    ) : activeMember.tier === "Gold" ? (
-                      <Sparkles size={16} strokeWidth={2.25} />
-                    ) : (
-                      <Star size={16} strokeWidth={2.25} />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-heading font-bold text-white/50">
-                      Member Aktif
-                      <span
-                        className={`px-1.5 py-0 rounded-md ${TIER_STYLE[activeMember.tier].badge} border`}
-                      >
-                        {activeMember.tier}
-                      </span>
-                    </div>
-                    <div className="flex items-baseline gap-2 mt-0.5 text-sm">
-                      <span className="text-white/60">Sisa Kuota:</span>
-                      <span
-                        className={`font-heading font-bold ${TIER_STYLE[activeMember.tier].text}`}
-                        data-testid="member-quota-remaining"
-                      >
-                        {activeMember.remainingKg.toFixed(1)} kg
-                      </span>
-                    </div>
-                    <div className="text-white/40 text-[10px] mt-0.5 flex items-center gap-1">
-                      <Calendar size={10} />
-                      Berlaku s/d {activeMember.expiry}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Daftar Member button + Save Regular Customer button */}
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <button
-                onClick={() => {
-                  setRegName(customerName || "");
-                  setRegisterOpen(true);
-                }}
-                data-testid="register-member-button"
-                className="h-11 rounded-xl border border-[#FFD700]/40 bg-gradient-to-r from-[#FFD700]/15 to-[#FFD700]/5 hover:from-[#FFD700]/25 hover:to-[#FFD700]/10 text-[#FFD700] font-heading font-bold text-xs tracking-wide flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
-              >
-                <Sparkles size={14} strokeWidth={2.5} />
-                DAFTAR MEMBER BARU
-              </button>
-              <button
-                onClick={() => {
-                  setRegCustName(customerName || "");
-                  setRegCustWa("");
-                  setRegCustAddress("");
-                  setRegCustOpen(true);
-                }}
-                data-testid="register-regular-button"
-                className="h-11 rounded-xl border-2 border-[#FFD700]/40 bg-transparent hover:bg-[#FFD700]/5 hover:border-[#FFD700]/70 text-[#FFD700]/90 hover:text-[#FFD700] font-heading font-bold text-xs tracking-wide flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
-              >
-                <NotebookPen size={14} strokeWidth={2.5} />
-                SIMPAN PELANGGAN REGULER
-              </button>
-            </div>
-
-            {/* Saved-regular-customer hint (when typed name matches saved regular) */}
-            {customerProfile?.kind === "regular" && (
-              <div
-                className="mt-2 rounded-xl border border-white/10 bg-white/[0.03] p-2.5 flex items-start gap-2"
-                data-testid="regular-customer-hint"
-              >
-                <NotebookPen size={13} className="text-[#FFD700] mt-0.5 flex-shrink-0" />
-                <div className="text-[11px] text-white/60 leading-snug min-w-0">
-                  <span className="font-heading font-bold text-white/80">
-                    Pelanggan reguler tersimpan
-                  </span>
-                  <div className="flex items-center gap-1.5 mt-0.5 text-white/50">
-                    <Phone size={10} />
-                    <span className="font-mono">{customerProfile.wa}</span>
-                  </div>
-                  <div className="flex items-start gap-1.5 mt-0.5 text-white/50">
-                    <MapPin size={10} className="mt-0.5 flex-shrink-0" />
-                    <span className="truncate">{customerProfile.address}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="text-white/50 text-xs uppercase tracking-widest mb-2 block font-medium">
-              Sumber Order
-            </label>
-            <Select value={sumberOrder} onValueChange={setSumberOrder}>
-              <SelectTrigger
-                data-testid="sumber-order-dropdown"
-                className="w-full h-14 glass text-white font-medium text-base rounded-2xl border-white/10 hover:border-[#FFD700]/50 transition-colors focus:ring-[#FFD700] focus:ring-offset-0"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-[#1A1A1A] border-white/10 text-white">
-                {SOURCE_OPTIONS.map((opt) => (
-                  <SelectItem
-                    key={opt.id}
-                    value={opt.id}
-                    data-testid={`sumber-option-${opt.id}`}
-                    className="focus:bg-[#FFD700]/10 focus:text-[#FFD700] py-3"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <opt.Icon size={15} />
-                      <div>
-                        <div className="font-medium">{opt.label}</div>
-                        <div className="text-[10px] text-white/40">{opt.sub}</div>
-                      </div>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {isMember && (
-              <div
-                className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#FFD700]/10 border border-[#FFD700]/30 text-[#FFD700] text-xs font-semibold"
-                data-testid="member-badge"
-              >
-                <CheckCircle2 size={12} />
-                Diskon Kosan Kerjasama 10% aktif
-              </div>
-            )}
-            {minKg > 0 && (
-              <div className="mt-2 text-white/40 text-[11px]" data-testid="min-kg-hint">
-                Min. kiloan untuk {selectedSource.label}: {minKg.toFixed(1)} kg
-              </div>
-            )}
-          </div>
+          <OrderSource
+            sumberOrder={sumberOrder}
+            setSumberOrder={setSumberOrder}
+            isMember={isMember}
+            minKg={minKg}
+            selectedSource={selectedSource}
+          />
         </section>
 
         {/* Durasi Pengerjaan — service speed selector. Applies to Kiloan,
@@ -1067,281 +771,33 @@ export default function POSScreen() {
           </div>
         </section>
 
-        {/* Tabs */}
-        <section className="animate-fade-up" style={{ animationDelay: "120ms" }}>
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList
-              className="w-full h-auto p-1.5 glass rounded-2xl grid grid-cols-4 gap-1"
-              data-testid="tabs-list"
-            >
-              {[
-                { v: "kiloan", label: "Kiloan", icon: Scale, testid: "tab-kiloan" },
-                { v: "satuan", label: "Satuan", icon: Shirt, testid: "tab-satuan" },
-                {
-                  v: "sepatu",
-                  label: "Sepatu",
-                  icon: Footprints,
-                  testid: "tab-sepatu-karpet",
-                },
-                {
-                  v: "showcase",
-                  label: "Showcase",
-                  icon: ShoppingBag,
-                  testid: "tab-showcase",
-                },
-              ].map((t) => (
-                <TabsTrigger
-                  key={t.v}
-                  value={t.v}
-                  data-testid={t.testid}
-                  className="flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl text-white/60 text-[11px] font-semibold data-[state=active]:bg-[#FFD700] data-[state=active]:text-black data-[state=active]:shadow-[0_0_15px_rgba(255,215,0,0.3)] transition-all"
-                >
-                  <t.icon size={18} strokeWidth={2.25} />
-                  <span>{t.label}</span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
-
-            {/* Kiloan */}
-            <TabsContent
-              value="kiloan"
-              className="mt-4 animate-fade-up"
-            >
-              {kiloanKg <= 0 ? (
-                <button
-                  type="button"
-                  onClick={handleKiloanIncrement}
-                  data-testid="kiloan-add-button"
-                  className="group w-full flex items-center justify-between gap-3 px-5 py-4 rounded-2xl glass border border-dashed border-[#FFD700]/30 hover:border-[#FFD700]/60 hover:bg-[#FFD700]/[0.04] transition-all active:scale-[0.99]"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-[#FFD700]/15 border border-[#FFD700]/30 flex items-center justify-center flex-shrink-0 group-hover:bg-[#FFD700] group-hover:text-black transition-colors">
-                      <Plus size={20} className="text-[#FFD700] group-hover:text-black" strokeWidth={2.5} />
-                    </div>
-                    <div className="text-left min-w-0">
-                      <div className="font-heading font-extrabold text-white text-sm tracking-tight">
-                        Tambah Cuci Kiloan
-                      </div>
-                      <div className="text-white/40 text-[11px] mt-0.5">
-                        Mulai {minKg.toFixed(1)} kg · {formatIDR(kiloanRate)}/kg ·{" "}
-                        <span style={{ color: speedTierDef.accent }}>
-                          {speedTierDef.label}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] uppercase tracking-widest font-heading font-bold text-[#FFD700]/70 flex-shrink-0">
-                    Opsional
-                  </span>
-                </button>
-              ) : (
-                <div className="glass rounded-2xl p-6">
-                  <div className="flex items-baseline justify-between mb-1">
-                    <h3 className="font-heading font-bold text-xl text-white">
-                      Cuci Kiloan
-                    </h3>
-                    <span className="text-[#FFD700] font-semibold text-sm">
-                      {formatIDR(kiloanRate)}/kg
-                    </span>
-                  </div>
-                  <p className="text-white/50 text-xs mb-5">
-                    Atur berat cucian · min {minKg.toFixed(1)} kg ·{" "}
-                    <span
-                      className="font-semibold"
-                      style={{ color: speedTierDef.accent }}
-                      data-testid="kiloan-active-speed-label"
-                    >
-                      {speedTierDef.label} ({speedTierDef.sub})
-                    </span>
-                  </p>
-                  <div className="flex items-center justify-between gap-3">
-                    <CounterBtn
-                      onClick={handleKiloanDecrement}
-                      testid="kiloan-decrease"
-                      disabled={kiloanKg <= 0}
-                    >
-                      <Minus size={22} />
-                    </CounterBtn>
-                    <div className="flex-1 text-center">
-                      <div className="relative flex items-baseline justify-center gap-1">
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={kiloanInput}
-                          onChange={handleKiloanInputChange}
-                          onBlur={handleKiloanInputBlur}
-                          data-testid="kiloan-manual-input"
-                          className="w-28 bg-transparent text-center font-heading font-black text-[#FFD700] text-5xl leading-none tracking-tight focus:outline-none border-b-2 border-transparent focus:border-[#FFD700]/40 transition-colors"
-                        />
-                        <span className="font-heading font-bold text-white/40 text-lg">
-                          kg
-                        </span>
-                      </div>
-                      <div
-                        className="text-white/50 text-[10px] uppercase tracking-widest mt-1.5"
-                        data-testid="kiloan-kg-display"
-                      >
-                        Kilogram
-                      </div>
-                    </div>
-                    <CounterBtn
-                      onClick={handleKiloanIncrement}
-                      testid="kiloan-increase"
-                      variant="primary"
-                    >
-                      <Plus size={22} />
-                    </CounterBtn>
-                  </div>
-                  <div className="mt-5 pt-4 border-t border-white/5 flex justify-between items-center">
-                    <span className="text-white/60 text-sm">Subtotal kiloan</span>
-                    <span
-                      className="font-heading font-bold text-white text-lg"
-                      data-testid="kiloan-subtotal"
-                    >
-                      {formatIDR(kiloanKg * kiloanRate)}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {kiloanKg > 0 && usingMembership && (
-                <div
-                  className={`mt-3 p-3 rounded-xl border ${TIER_STYLE[activeMember.tier].bg} ${TIER_STYLE[activeMember.tier].border}`}
-                  data-testid="membership-helper"
-                >
-                  <div className="flex items-start gap-2.5">
-                    {activeMember.tier === "Platinum" ? (
-                      <Crown size={14} className={TIER_STYLE[activeMember.tier].text} />
-                    ) : activeMember.tier === "Gold" ? (
-                      <Sparkles size={14} className={TIER_STYLE[activeMember.tier].text} />
-                    ) : (
-                      <Star size={14} className={TIER_STYLE[activeMember.tier].text} />
-                    )}
-                    <div className="flex-1 text-xs leading-relaxed">
-                      <span className="text-white/70">
-                        Akan memotong sisa kuota membership.
-                      </span>{" "}
-                      <span className={`font-heading font-bold ${TIER_STYLE[activeMember.tier].text}`}>
-                        −{kiloanKg.toFixed(1)} kg
-                      </span>
-                      <div className="text-white/40 text-[10px] mt-0.5">
-                        Sisa setelah order: {memberRemainingAfter.toFixed(1)} kg
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Optional detail (only when kiloan is active) */}
-              {kiloanKg > 0 && (
-                <div className="mt-4 pt-4 border-t border-white/5">
-                <button
-                  onClick={() => setShowKiloanDetail((v) => !v)}
-                  data-testid="toggle-kiloan-detail"
-                  className="w-full flex items-center justify-between px-3 h-11 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-[#FFD700]/30 text-sm transition-all"
-                >
-                  <span className="flex items-center gap-2 text-white/80 font-medium">
-                    <Package size={14} className="text-[#FFD700]" />
-                    Hitung Detail Item (Opsional)
-                  </span>
-                  {showKiloanDetail ? (
-                    <ChevronUp size={16} className="text-white/50" />
-                  ) : (
-                    <ChevronDown size={16} className="text-white/50" />
-                  )}
-                </button>
-                {showKiloanDetail && (
-                  <div
-                    className="mt-3 p-3 rounded-xl bg-black/30 border border-white/5 space-y-2 animate-fade-up"
-                    data-testid="kiloan-detail-list"
-                  >
-                    <p className="text-white/40 text-[10px] uppercase tracking-wider font-medium px-1">
-                      Catat isi bag · tidak mempengaruhi harga
-                    </p>
-                    {KILOAN_DETAIL_ITEMS.map((item) => {
-                      const c = kiloanDetail[item.id] || 0;
-                      return (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between px-2 py-1.5"
-                          data-testid={`kiloan-detail-${item.id}`}
-                        >
-                          <span className="text-white/80 text-sm">{item.name}</span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => bumpCount(setKiloanDetail)(item.id, -1)}
-                              data-testid={`kiloan-detail-dec-${item.id}`}
-                              className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 active:scale-90 transition-all"
-                            >
-                              <Minus size={14} />
-                            </button>
-                            <span
-                              className="min-w-[1.5rem] text-center font-heading font-bold text-[#FFD700] text-sm"
-                              data-testid={`kiloan-detail-count-${item.id}`}
-                            >
-                              {c}
-                            </span>
-                            <button
-                              onClick={() => bumpCount(setKiloanDetail)(item.id, 1)}
-                              data-testid={`kiloan-detail-inc-${item.id}`}
-                              className={`w-8 h-8 rounded-lg border flex items-center justify-center active:scale-90 transition-all ${
-                                c > 0
-                                  ? "bg-[#FFD700] text-black border-[#FFD700]"
-                                  : "bg-white/5 border-white/10 hover:bg-white/10"
-                              }`}
-                            >
-                              <Plus size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="satuan" className="mt-4 space-y-2.5">
-              {SATUAN_ITEMS.map((item, i) => (
-                <ItemRow
-                  key={item.id}
-                  item={item}
-                  count={satuanCounts[item.id] || 0}
-                  onInc={() => bumpCount(setSatuanCounts)(item.id, 1)}
-                  onDec={() => bumpCount(setSatuanCounts)(item.id, -1)}
-                  idx={i}
-                  multiplier={speedMultiplier}
-                />
-              ))}
-            </TabsContent>
-            <TabsContent value="sepatu" className="mt-4 space-y-2.5">
-              {SEPATU_ITEMS.map((item, i) => (
-                <ItemRow
-                  key={item.id}
-                  item={item}
-                  count={sepatuCounts[item.id] || 0}
-                  onInc={() => bumpCount(setSepatuCounts)(item.id, 1)}
-                  onDec={() => bumpCount(setSepatuCounts)(item.id, -1)}
-                  idx={i}
-                  multiplier={speedMultiplier}
-                />
-              ))}
-            </TabsContent>
-            <TabsContent value="showcase" className="mt-4 space-y-2.5">
-              {SHOWCASE_ITEMS.map((item, i) => (
-                <ItemRow
-                  key={item.id}
-                  item={item}
-                  count={showcaseCounts[item.id] || 0}
-                  onInc={() => bumpCount(setShowcaseCounts)(item.id, 1)}
-                  onDec={() => bumpCount(setShowcaseCounts)(item.id, -1)}
-                  idx={i}
-                />
-              ))}
-            </TabsContent>
-          </Tabs>
-        </section>
+        <ServiceTabs
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          kiloanKg={kiloanKg}
+          kiloanInput={kiloanInput}
+          kiloanRate={kiloanRate}
+          minKg={minKg}
+          speedTierDef={speedTierDef}
+          speedMultiplier={speedMultiplier}
+          handleKiloanIncrement={handleKiloanIncrement}
+          handleKiloanDecrement={handleKiloanDecrement}
+          handleKiloanInputChange={handleKiloanInputChange}
+          handleKiloanInputBlur={handleKiloanInputBlur}
+          showKiloanDetail={showKiloanDetail}
+          setShowKiloanDetail={setShowKiloanDetail}
+          kiloanDetail={kiloanDetail}
+          bumpKiloanDetail={bumpCount(setKiloanDetail)}
+          satuanCounts={satuanCounts}
+          bumpSatuan={bumpCount(setSatuanCounts)}
+          sepatuCounts={sepatuCounts}
+          bumpSepatu={bumpCount(setSepatuCounts)}
+          showcaseCounts={showcaseCounts}
+          bumpShowcase={bumpCount(setShowcaseCounts)}
+          usingMembership={usingMembership}
+          activeMember={activeMember}
+          memberRemainingAfter={memberRemainingAfter}
+        />
 
         {/* Evidence photos (multi) */}
         <section className="animate-fade-up" style={{ animationDelay: "200ms" }}>
@@ -1487,62 +943,16 @@ export default function POSScreen() {
       </main>
 
       {/* Sticky bottom bar */}
-      <div
-        className="fixed bottom-0 inset-x-0 max-w-md mx-auto z-50 glass-strong border-t border-white/10 rounded-t-3xl px-5 pt-4 pb-5 shadow-[0_-20px_60px_rgba(0,0,0,0.6)]"
-        data-testid="sticky-bottom-bar"
-      >
-        <div className="flex items-end justify-between mb-3">
-          <div>
-            <div className="text-white/50 text-[11px] uppercase tracking-widest font-medium">
-              Total Harga
-              {usingMembership && (
-                <span
-                  className="ml-1.5 text-[#FFD700] normal-case tracking-normal"
-                  data-testid="total-membership-note"
-                >
-                  (membership cover)
-                </span>
-              )}
-              {!usingMembership && isMember && subtotal > 0 && (
-                <span className="ml-1.5 text-[#FFD700] normal-case tracking-normal">
-                  (−{formatIDR(discount)})
-                </span>
-              )}
-            </div>
-            <div
-              className="font-heading font-black text-[#FFD700] text-3xl leading-none tracking-tight mt-1"
-              data-testid="total-price-display"
-            >
-              {formatIDR(total)}
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-white/50 text-[11px] uppercase tracking-widest font-medium">
-              Item
-            </div>
-            <div className="font-heading font-bold text-white text-lg mt-1">
-              {totalItemsCount}
-            </div>
-          </div>
-        </div>
-        <button
-          onClick={handleSave}
-          data-testid="save-print-button"
-          disabled={!!saveBlockedReason}
-          className="w-full h-14 rounded-2xl bg-[#FFD700] text-black font-heading font-extrabold text-base tracking-wide flex items-center justify-center gap-2.5 transition-all active:scale-[0.97] hover:bg-[#ffdf33] disabled:opacity-40 disabled:cursor-not-allowed shadow-[0_8px_30px_rgba(255,215,0,0.3)]"
-        >
-          <QrCode size={20} strokeWidth={2.5} />
-          SIMPAN & CETAK QR CODE
-        </button>
-        {saveBlockedReason && (
-          <div
-            className="text-center text-[11px] text-[#FF8A3D] mt-2 font-medium"
-            data-testid="save-blocked-hint"
-          >
-            {saveBlockedReason}
-          </div>
-        )}
-      </div>
+      <CartSummary
+        total={total}
+        totalItemsCount={totalItemsCount}
+        usingMembership={usingMembership}
+        isMember={isMember}
+        subtotal={subtotal}
+        discount={discount}
+        saveBlockedReason={saveBlockedReason}
+        onSave={handleSave}
+      />
 
       {/* Evidence photo modal */}
       <Dialog open={photoModalOpen} onOpenChange={handleClosePhotoModal}>
