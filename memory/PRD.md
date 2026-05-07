@@ -22,6 +22,20 @@ Mobile-first three-role ops app + Admin Command Center for a laundry business "L
 - **Superadmin** — monitor KPI, atur multi-tier pricing, lihat laporan pegawai, monitor kuota B2B.
 
 ## What's Been Implemented
+### P1 — Component Refactor — iter_22 100%
+Large parent components split into focused single-responsibility files. **No behavioral change**; all data-testids preserved; backend 82/82 GREEN; frontend regression GREEN via testing agent.
+- **POSScreen.jsx**: 1670 → **1112 lines** (~33% reduction). Extracted into `/components/pos/`:
+  - `CustomerSelection.jsx` (212 lines) — name input + autocomplete dropdown + active-member badge + register CTAs + saved-regular hint.
+  - `OrderSource.jsx` (71 lines) — Sumber Order Radix Select + min-kg hint + Kosan 10% badge.
+  - `ServiceTabs.jsx` (356 lines) — full 4-tab manager (Kiloan keypad, Satuan/Sepatu/Showcase ItemRows, kiloan optional-detail list, membership helper).
+  - `CartSummary.jsx` (81 lines) — sticky bottom bar with Total + SIMPAN & CETAK QR CODE + saveBlockedReason hint.
+  - `CounterBtn.jsx` (26 lines) and `ItemRow.jsx` (70 lines) — small helpers used by ServiceTabs.
+- **AdminDashboard.jsx**: 1000 → **303 lines** (~70% reduction). Extracted into `/components/admin/`:
+  - `PricingTable.jsx` (286 lines) — Pengaturan Harga 4-tier × 8-row grid + bulk save logic.
+  - `B2BQuotas.jsx` (120 lines) — Kuota B2B partner cards with progress bars.
+  - `StaffPerformance.jsx` (195 lines) — exports `default` (Laporan Pegawai table) + named `StaffPerformanceChart` (Overview bar chart).
+  - `OverdueWidget.jsx` (118 lines) — Daftar Piutang list with WA-tagihan deep links.
+
 ### P0 — Service Speed (Durasi Pengerjaan) — iter_21 100%
 Three-tier service speed pricing across DB, Admin, and POS.
 - **Schema**: `Price.service_id` relaxed to `str` (was Literal). Added `umum` (Walk-in / general public) column → 4 tier columns total (umum/tamel/laskita/member). Cuci Kiloan now stored as **3 separate rows** by speed: `kiloan_reguler`, `kiloan_flash`, `kiloan_express`. Satuan & Sepatu remain single base rows; Showcase keeps flat retail price (no speed tier).
