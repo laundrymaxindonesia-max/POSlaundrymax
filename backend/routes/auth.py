@@ -52,6 +52,21 @@ class User(BaseModel):
     picture: Optional[str] = None
 
 
+class SessionExchangeResponse(BaseModel):
+    """Session exchange response. Includes the session_token in the body so the
+    frontend can persist it in localStorage and send it back as
+    `Authorization: Bearer <token>` — this is the fallback path for browsers
+    that block third-party cookies (Safari, Firefox strict, Brave).
+    """
+    model_config = ConfigDict(extra="ignore")
+
+    user_id: str
+    email: EmailStr
+    name: str
+    picture: Optional[str] = None
+    session_token: str
+
+
 class SessionExchangeRequest(BaseModel):
     session_id: str = Field(..., min_length=1)
 
@@ -118,10 +133,10 @@ def _set_session_cookie(response: Response, session_token: str) -> None:
 
 
 # ---------------- POST /api/auth/session ----------------
-@router.post("/session", response_model=User)
+@router.post("/session", response_model=SessionExchangeResponse)
 async def exchange_session(
     payload: SessionExchangeRequest, response: Response
-) -> User:
+) -> SessionExchangeResponse:
     """Called by the frontend AuthCallback right after Emergent redirects back.
 
     We fetch user data from Emergent's /session-data with X-Session-ID, then
@@ -181,7 +196,7 @@ async def exchange_session(
     _set_session_cookie(response, session_token)
 
     user_doc = await users_col.find_one({"user_id": user_id}, {"_id": 0})
-    return User(**user_doc)
+    return SessionExchangeResponse(**user_doc, session_token=session_token)
 
 
 # ---------------- GET /api/auth/me ----------------

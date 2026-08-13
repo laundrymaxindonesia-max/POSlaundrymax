@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
+import { setSessionToken } from "@/lib/authToken";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -45,6 +46,10 @@ export default function AuthCallback() {
           } catch (e) { /* ignore */ }
           throw new Error(detail);
         }
+        // Persist session_token in localStorage as a cross-origin fallback for
+        // browsers that block third-party cookies (Safari, Firefox strict).
+        const body = await res.json();
+        if (body?.session_token) setSessionToken(body.session_token);
         await checkAuth();
         // Clear fragment and redirect to the owner's home (admin console).
         window.history.replaceState(null, "", "/admin");

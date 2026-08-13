@@ -12,6 +12,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { clearSessionToken, withAuth } from "@/lib/authToken";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -28,7 +29,7 @@ export function AuthProvider({ children }) {
 
   const checkAuth = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/auth/me`, { credentials: "include" });
+      const res = await fetch(`${API}/auth/me`, withAuth());
       if (!res.ok) {
         setUser(null);
       } else {
@@ -54,11 +55,9 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     try {
-      await fetch(`${API}/auth/logout`, {
-        method: "POST",
-        credentials: "include",
-      });
+      await fetch(`${API}/auth/logout`, withAuth({ method: "POST" }));
     } catch (e) { /* ignore network errors on logout */ }
+    clearSessionToken();
     setUser(null);
   }, []);
 

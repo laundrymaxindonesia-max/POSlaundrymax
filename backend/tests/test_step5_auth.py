@@ -202,3 +202,46 @@ class TestOwnerSessionSimulation:
         # /auth/me with that token now returns 401
         r2 = requests.get(f"{API}/auth/me", headers={"Authorization": f"Bearer {self.owner_token}"})
         assert r2.status_code == 401
+
+    def test_logout_via_bearer_deletes_session(self, mongo):
+        """Cross-origin fallback: logout carried purely via Authorization header
+        (no cookie) must still remove the session row."""
+        assert mongo["user_sessions"].find_one({"session_token": self.owner_token}) is not None
+        r = requests.post(
+            f"{API}/auth/logout",
+            headers={"Authorization": f"Bearer {self.owner_token}"},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json() == {"ok": True}
+        assert mongo["user_sessions"].find_one({"session_token": self.owner_token}) is None
+        # Subsequent /me with same Bearer → 401
+        r2 = requests.get(f"{API}/auth/me", headers={"Authorization": f"Bearer {self.owner_token}"})
+        assert r2.status_code == 401
+
+
+# ---------------- Session-exchange response schema (SessionExchangeResponse) ----------------
+class TestSessionExchangeResponseSchema:
+    """The prod-only bug fix adds `session_token` to the /session response body.
+
+    We can't call the real Emergent /session-data endpoint from tests, but we
+    can assert the FastAPI response model contains the field by introspecting
+    the OpenAPI schema. This locks in the contract so a regression can't drop
+    the field silently.
+    """
+
+    def test_openapi_session_response_includes_session_token(self):
+        # OpenAPI is served by the backend directly (not under /api ingress prefix),
+        # so hit it on localhost:8001 where the app roots.
+        r = requests.get("http://localhost:8001/openapi.json", timeout=15)
+        assert r.status_code == 200, r.text
+        spec = r.json()
+        schemas = spec.get("components", {}).get("schemas", {})
+        model = schemas.get("SessionExchangeResponse")
+        assert model is not None, "SessionExchangeResponse not exposed in OpenAPI"
+        props = model.get("properties", {})
+        assert "session_token" in props, f"session_token missing from response: {list(props)}"
+        assert "session_token" in (model.get("required") or []), \
+            "session_token must be a required field on SessionExchangeResponse"
+        # Also verify user identity fields remain
+        for f in ("user_id", "email", "name"):
+            assert f in props, f"{f} missing from SessionExchangeResponse"

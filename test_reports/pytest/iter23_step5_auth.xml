@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="16" time="3.452" timestamp="2026-08-13T18:15:03.900335+00:00" hostname="agent-env-44bf7f9e-f241-4d24-af6b-d26960a2868f"><testcase classname="backend.tests.test_step5_auth.TestStaffPin" name="test_staff_pin_correct_returns_200_with_identity" time="0.545" /><testcase classname="backend.tests.test_step5_auth.TestStaffPin" name="test_staff_pin_wrong_returns_403" time="0.253" /><testcase classname="backend.tests.test_step5_auth.TestStaffPin" name="test_staff_pin_mismatched_id_pin_returns_403" time="0.128" /><testcase classname="backend.tests.test_step5_auth.TestStaffPin" name="test_staff_pin_missing_staff_id_returns_422" time="0.133" /><testcase classname="backend.tests.test_step5_auth.TestStaffPin" name="test_staff_pin_missing_pin_returns_422" time="0.267" /><testcase classname="backend.tests.test_step5_auth.TestStaffPin" name="test_staff_pin_non_digits_returns_422" time="0.264" /><testcase classname="backend.tests.test_step5_auth.TestAuthMeUnauthenticated" name="test_me_no_cookie_or_header_returns_401" time="0.123" /><testcase classname="backend.tests.test_step5_auth.TestAuthMeUnauthenticated" name="test_me_invalid_bearer_returns_401" time="0.134" /><testcase classname="backend.tests.test_step5_auth.TestAuthSessionExchange" name="test_session_exchange_bogus_id_returns_401" time="0.210" /><testcase classname="backend.tests.test_step5_auth.TestOwnerSessionSimulation" name="test_me_with_owner_bearer_returns_200" time="0.143" /><testcase classname="backend.tests.test_step5_auth.TestOwnerSessionSimulation" name="test_me_with_owner_cookie_returns_200" time="0.127" /><testcase classname="backend.tests.test_step5_auth.TestOwnerSessionSimulation" name="test_me_with_non_whitelisted_session_returns_403" time="0.140" /><testcase classname="backend.tests.test_step5_auth.TestOwnerSessionSimulation" name="test_me_with_non_whitelisted_cookie_returns_403" time="0.137" /><testcase classname="backend.tests.test_step5_auth.TestOwnerSessionSimulation" name="test_logout_deletes_session" time="0.267" /><testcase classname="backend.tests.test_step5_auth.TestOwnerSessionSimulation" name="test_logout_via_bearer_deletes_session" time="0.274" /><testcase classname="backend.tests.test_step5_auth.TestSessionExchangeResponseSchema" name="test_openapi_session_response_includes_session_token" time="0.121"><failure message="requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)">/root/.venv/lib/python3.11/site-packages/requests/models.py:978: in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/__init__.py:346: in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:337: in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/json/decoder.py:355: in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+E   json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_step5_auth.py:235: in test_openapi_session_response_includes_session_token
+    spec = r.json()
+           ^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/models.py:982: in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+E   requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)</failure></testcase></testsuite></testsuites>

@@ -1,0 +1,25 @@
+{
+  "summary": "PROD cross-origin auth bug fix VERIFIED end-to-end. Backend contract: /api/auth/session response now carries `session_token` in body (OpenAPI SessionExchangeResponse asserts session_token present + required alongside user_id/email/name). Backend /api/auth/me works with ONLY Authorization: Bearer <token> (no cookie) → 200 with User payload; works with ONLY cookie → 200 (backward compat); invalid Bearer → 401. /api/auth/logout via Bearer-only header (no cookie) deletes the sessions row in mongo AND returns {ok:true}. Full pytest 84/84 GREEN (baseline 82 + 2 new tests: test_logout_via_bearer_deletes_session + test_openapi_session_response_includes_session_token). Frontend Playwright cross-origin simulation: cleared all cookies then set ONLY window.localStorage.laundrymax_session_token to a mongo-seeded owner token → navigated to /admin → AdminDashboard rendered fully (kpi-grid, sidebar-overview, staff-performance chart, piutang widget, admin-logout-button, SUPERADMIN header with theomahrizal@gmail.com email — all driven by Bearer-only /auth/me). Clicking admin-logout-button cleared localStorage laundrymax_session_token AND redirected to /absen; the mongo session row was also removed (verified — cleanup script found session already deleted by logout). The production login bug is fixed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_step5_auth.py",
+    "/app/test_reports/pytest/iter23_full.xml",
+    "/app/test_reports/pytest/iter23_step5_auth.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix is minimal and correct: response body carries session_token only where the frontend actively needs it, cookie path is preserved unchanged so same-origin/dev keeps working transparently.",
+    "authToken.js localStorage helper wraps try/catch around all storage access — safe for private-mode / storage-disabled browsers.",
+    "withAuth() in AuthContext is applied to BOTH checkAuth() and logout(), so Bearer header is sent on all authenticated calls not just /auth/me — good.",
+    "Small hardening idea (not blocking): after fetch response, if status is 401 the client could clearSessionToken() to purge a stale token from localStorage. Currently a stale token can linger silently and be sent on every subsequent request until explicit logout. Not required for this bug but nice-to-have."
+  ],
+  "updated_files": ["/app/backend/tests/test_step5_auth.py"],
+  "success_rate": {"backend": "100% (84/84)", "frontend": "100% (cross-origin Bearer-only /admin render + Bearer logout both PASS)"},
+  "test_credentials": "Owner whitelist: theomahrizal@gmail.com. For automated tests, seed users + user_sessions collections directly per /app/auth_testing.md Step 1 and use the token as either cookie or Authorization: Bearer <token>.",
+  "seed_data_creation": "Test owner user + session seeded in mongo (users.user_id=test-xorigin-*, user_sessions.session_token=test_session_xorigin_*). Session was deleted by the logout flow under test; user document cleaned up post-test. No canonical data touched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bearer-only cross-origin auth path is now validated by both pytest (test_me_with_owner_bearer_returns_200, test_logout_via_bearer_deletes_session, test_openapi_session_response_includes_session_token) and a Playwright script that clears cookies, sets only localStorage['laundrymax_session_token'], and navigates to /admin. To reproduce: (1) seed users+user_sessions in mongo per auth_testing.md, (2) page.context.clear_cookies(), (3) page.evaluate to set localStorage token, (4) goto /admin. AdminDashboard should render with theomahrizal@gmail.com in the header. Backend baseline is 84/84 (was 82/82 in iter_22).",
+  "rca of the issue": "PROD bug root cause: In Vercel(frontend) + Render(backend) deployment, they are cross-site origins so the httpOnly Set-Cookie header (SameSite=None; Secure) from POST /api/auth/session is dropped by Safari/Firefox-strict/Brave as a blocked 3rd-party cookie. Subsequent GET /api/auth/me carried no cookie → 401 → login loop. Fix (verified): backend now returns session_token in the JSON body of /api/auth/session as well; frontend AuthCallback persists it to localStorage; AuthContext's checkAuth() and logout() wrap fetch options via withAuth() which adds Authorization: Bearer <token> header AND keeps credentials:'include'. Backend's _resolve_session_from_cookie_or_header already understood Bearer tokens — the fix simply surfaces the token to the client. No functional regression on same-origin (cookie still set + used); Bearer fallback activates transparently when cookie is blocked. Verified with a Playwright run that has ZERO cookies and only a localStorage token — AdminDashboard renders identically."
+}
