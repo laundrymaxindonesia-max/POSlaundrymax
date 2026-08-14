@@ -8,11 +8,11 @@ GET  /api/attendance               → optional debug list (filter by staff_id, 
 
 from __future__ import annotations
 
-import uuid
+import logging
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import List, Optional
 
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
@@ -22,12 +22,11 @@ from models import (
     ShiftReport,
     StaffPublic,
 )
+from storage import make_object_key, resolve_url, save_image_bytes
 from utils import deserialize_from_mongo, serialize_for_mongo
 
+log = logging.getLogger(__name__)
 router = APIRouter(tags=["staff_attendance"])
-
-UPLOADS_DIR = Path(__file__).resolve().parent.parent / "uploads" / "attendance"
-UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
 MAX_SELFIE_BYTES = 5 * 1024 * 1024  # 5 MB
@@ -103,16 +102,17 @@ async def clock_in(
     if len(raw) > MAX_SELFIE_BYTES:
         raise HTTPException(status_code=413, detail="Selfie too large (max 5 MB)")
 
-    ext = {
-        "image/jpeg": "jpg",
-        "image/jpg": "jpg",
-        "image/png": "png",
-        "image/webp": "webp",
-    }.get(selfie.content_type, "jpg")
-    filename = f"{staff_id}_{uuid.uuid4().hex[:10]}.{ext}"
-    path = UPLOADS_DIR / filename
-    path.write_bytes(raw)
-    selfie_url = f"/api/uploads/attendance/{filename}"
+    key = make_object_key("attendance", staff_id, selfie.content_type)
+    try:
+        await save_image_bytes(raw, key=key, content_type=selfie.content_type)
+    except (ClientError, BotoCoreError) as exc:
+        log.exception("Attendance selfie upload failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Storage upload failed")
+
+    # Persist the bare object KEY (not a URL) so we can regenerate presigned
+    # URLs at read time. Legacy rows that hold a full `/api/uploads/...` URL
+    # keep working — resolve_url() passes them through untouched.
+    selfie_url = key
 
     record = Attendance(
         staff_name=staff["name"],
@@ -126,6 +126,8 @@ async def clock_in(
     # Attach staff_id as a non-model index field so clock-out can find it
     doc["staff_id"] = staff_id
     await attendance_col.insert_one(doc)
+    # Expose a resolved URL (presigned R2 or local path) in the response.
+    record.selfie_url = await resolve_url(selfie_url)
     return record
 
 
@@ -163,7 +165,9 @@ async def clock_out(payload: ClockOutRequest) -> Attendance:
         },
     )
     updated = await attendance_col.find_one({"id": open_row["id"]}, {"_id": 0})
-    return Attendance(**deserialize_from_mongo(updated))
+    record = Attendance(**deserialize_from_mongo(updated))
+    record.selfie_url = await resolve_url(record.selfie_url)
+    return record
 
 
 # ---------------- GET /api/attendance (debug/admin) ----------------
@@ -183,4 +187,7 @@ async def list_attendance(
         .sort("clock_in_time", -1)
         .to_list(limit)
     )
-    return [Attendance(**deserialize_from_mongo(r)) for r in rows]
+    records = [Attendance(**deserialize_from_mongo(r)) for r in rows]
+    for rec in records:
+        rec.selfie_url = await resolve_url(rec.selfie_url)
+    return records

@@ -11,11 +11,11 @@ POST   /api/orders/{order_id}/pod         → upload proof-of-delivery photos
 
 from __future__ import annotations
 
-import uuid
+import logging
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import List, Optional
 
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 
 from db import orders_col
@@ -27,14 +27,23 @@ from models import (
     PaymentStatus,
     StatusUpdate,
 )
+from storage import make_object_key, resolve_url, save_image_bytes
 from utils import deserialize_from_mongo, serialize_for_mongo
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix="/orders", tags=["orders"])
 
-POD_DIR = Path(__file__).resolve().parent.parent / "uploads" / "pod"
-POD_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
 MAX_POD_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+async def _hydrate_pod_urls(order: Order) -> Order:
+    """Replace stored object keys in ``pod_urls`` with usable frontend URLs
+    (presigned R2 GET URLs in prod, /api/uploads/... locally). Idempotent —
+    legacy full paths pass through untouched."""
+    if order.pod_urls:
+        order.pod_urls = [await resolve_url(u) for u in order.pod_urls]
+    return order
 
 
 @router.post("", response_model=Order, status_code=201)
@@ -86,7 +95,10 @@ async def list_orders(
         .sort("created_at", -1)
         .to_list(limit)
     )
-    return [Order(**deserialize_from_mongo(r)) for r in rows]
+    orders = [Order(**deserialize_from_mongo(r)) for r in rows]
+    for o in orders:
+        await _hydrate_pod_urls(o)
+    return orders
 
 
 @router.get("/{order_id}", response_model=Order)
@@ -94,7 +106,7 @@ async def get_order(order_id: str) -> Order:
     row = await orders_col.find_one({"order_id": order_id}, {"_id": 0})
     if not row:
         raise HTTPException(status_code=404, detail="Order not found")
-    return Order(**deserialize_from_mongo(row))
+    return await _hydrate_pod_urls(Order(**deserialize_from_mongo(row)))
 
 
 @router.patch("/{order_id}/status", response_model=Order)
@@ -118,7 +130,7 @@ async def update_status(order_id: str, payload: StatusUpdate) -> Order:
         },
     )
     updated = await orders_col.find_one({"order_id": order_id}, {"_id": 0})
-    return Order(**deserialize_from_mongo(updated))
+    return await _hydrate_pod_urls(Order(**deserialize_from_mongo(updated)))
 
 
 # ---------------- POST /api/orders/{order_id}/pod ----------------
@@ -150,15 +162,16 @@ async def upload_pod(
     if len(raw) > MAX_POD_BYTES:
         raise HTTPException(status_code=413, detail="Photo too large (max 5 MB)")
 
-    ext = {
-        "image/jpeg": "jpg",
-        "image/jpg": "jpg",
-        "image/png": "png",
-        "image/webp": "webp",
-    }.get(photo.content_type, "jpg")
-    filename = f"{order_id}_{kind}_{uuid.uuid4().hex[:8]}.{ext}"
-    (POD_DIR / filename).write_bytes(raw)
-    pod_url = f"/api/uploads/pod/{filename}"
+    pod_key = make_object_key("pod", f"{order_id}_{kind}", photo.content_type)
+    try:
+        await save_image_bytes(raw, key=pod_key, content_type=photo.content_type)
+    except (ClientError, BotoCoreError) as exc:
+        log.exception("PoD upload failed for order=%s: %s", order_id, exc)
+        raise HTTPException(status_code=502, detail="Storage upload failed")
+
+    # Store the bare object key. resolve_url() converts it to a presigned R2
+    # URL (or /api/uploads/... locally) at read time.
+    pod_url = pod_key
 
     event = OrderEvent(
         status=row["order_status"],  # audit event, status doesn't change here
@@ -180,4 +193,4 @@ async def upload_pod(
         },
     )
     updated = await orders_col.find_one({"order_id": order_id}, {"_id": 0})
-    return Order(**deserialize_from_mongo(updated))
+    return await _hydrate_pod_urls(Order(**deserialize_from_mongo(updated)))

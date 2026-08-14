@@ -62,6 +62,12 @@ This is your `MONGO_URL`.
 | `DB_NAME` | ✅ | `laundrymax` | The database name; must match what's at the end of `MONGO_URL`. |
 | `CORS_ORIGINS` | ✅ | `https://laundrymax.vercel.app,https://www.laundrymax.id` | Comma-separated list of frontend origins allowed to call the API. **Do not use `*` in production.** |
 | `OWNER_EMAILS` | ⚠️ recommended | `theomahrizal@gmail.com,owner2@gmail.com` | Comma-separated Gmail addresses allowed to log in as Owner/Superadmin via Google OAuth. Defaults to `theomahrizal@gmail.com` if unset. |
+| `R2_ACCOUNT_ID` | ⚠️ prod photos | `abc123def456...` | Cloudflare account ID (see §13). Leaving all four `R2_*` vars blank keeps uploads on local disk (dev/preview safe). |
+| `R2_ACCESS_KEY_ID` | ⚠️ prod photos | `a1b2c3...` | R2 API token access key. |
+| `R2_SECRET_ACCESS_KEY` | ⚠️ prod photos | `x9y8z7...` | R2 API token secret. |
+| `R2_BUCKET` | ⚠️ prod photos | `laundrymax-photos` | Private bucket for selfies + PoD photos. |
+| `R2_ENDPOINT_URL` | optional | `https://<account>.r2.cloudflarestorage.com` | Auto-derived from `R2_ACCOUNT_ID` if left blank. Override only for jurisdictional buckets (EU/FedRAMP). |
+| `R2_PRESIGNED_GET_TTL` | optional | `900` | Presigned-URL lifetime in seconds (max 900 = 15 min, clamped server-side). |
 | `EMERGENT_LLM_KEY` | ➖ optional | `sk-emergent-xxx` | Only needed if you add LLM features later. Not used by current MVP. |
 
 ### 4.2 Frontend (`frontend/.env.production`)
@@ -240,9 +246,110 @@ If all pass, you're live. 🎉
 | `backend/db.py` | MongoDB client — reads `MONGO_URL` + `DB_NAME` from env. |
 | `backend/routes/auth.py` | Reads `OWNER_EMAILS` from env (defaults to single owner). |
 | `backend/requirements.txt` | All Python deps. Render reads this on first deploy. |
+| `backend/storage.py` | R2 / local-disk hybrid uploader. Reads all `R2_*` env vars. |
 | `frontend/.env` | Local dev — points to local backend. |
 | `frontend/.env.production` | Optional — Vercel uses its own dashboard env vars instead. |
 | `frontend/package.json` | Yarn deps + build script. |
+
+---
+
+## 13. Cloudflare R2 — Foto Absensi & PoD ke Object Storage
+
+**Kenapa perlu?** Foto selfie absensi + foto Proof-of-Delivery saat ini disimpan di **disk lokal Render**. Setiap redeploy = **semua foto hilang**. R2 free tier kasih 10GB (cukup untuk ~20.000 foto @500KB) tanpa risiko itu.
+
+**Perilaku otomatis:** Kalau **keempat** env var `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` diisi di Render → backend otomatis upload ke R2 + serve via 15-menit presigned URL. Kalau kosong (dev/preview) → tetap disk lokal. Zero-code-change deploy.
+
+### 13.1 Buat Bucket R2 (5 menit)
+
+1. Buka [https://dash.cloudflare.com](https://dash.cloudflare.com) → sign up gratis (butuh CC untuk verify tapi tidak di-charge di free tier).
+2. Sidebar kiri → **R2 Object Storage** → **Create bucket**.
+3. Name: `laundrymax-photos` · Location: **Automatic** · Klik **Create bucket**.
+4. **PENTING**: Biarkan bucket **PRIVATE** — jangan aktifkan Public Access. Frontend akan pakai presigned URL, bukan direct link.
+5. Catat **Account ID** (pojok kanan atas dashboard R2, klik untuk copy). Simpan sebagai `R2_ACCOUNT_ID`.
+
+### 13.2 Buat API Token
+
+1. Di halaman R2, klik **Manage R2 API Tokens** (kanan atas) → **Create API Token**.
+2. **Token name**: `laundrymax-backend`
+3. **Permissions**: **Object Read & Write**
+4. **Specify bucket**: pilih `laundrymax-photos` (jangan "All buckets" — batasi scope demi keamanan).
+5. **TTL**: **Forever** (atau set tanggal renewal kalau mau).
+6. Klik **Create API Token** → Cloudflare kasih:
+   - **Access Key ID** → simpan sebagai `R2_ACCESS_KEY_ID`
+   - **Secret Access Key** → simpan sebagai `R2_SECRET_ACCESS_KEY` (⚠️ **tampil sekali!** — copy langsung ke Notepad).
+
+### 13.3 Set Env Var di Render
+
+Balik ke Render dashboard → service `laundrymax-api` → tab **Environment** → tambah 4 variable:
+
+| Key | Value |
+|---|---|
+| `R2_ACCOUNT_ID` | (dari §13.1) |
+| `R2_ACCESS_KEY_ID` | (dari §13.2) |
+| `R2_SECRET_ACCESS_KEY` | (dari §13.2) |
+| `R2_BUCKET` | `laundrymax-photos` |
+
+Klik **Save Changes** → backend auto-restart (~30 detik).
+
+### 13.4 Verifikasi Upload R2 Berhasil
+
+**Cara A — Via aplikasi (paling cepat)**
+
+1. Buka `https://laundrymax-xxx.vercel.app/absen`.
+2. Klik salah satu staff → PIN `1234` → **ABSEN MASUK** → izinkan kamera + lokasi → submit.
+3. Balik ke Cloudflare R2 → bucket `laundrymax-photos` → tab **Objects**.
+4. Harus muncul file baru dengan key `attendance/<staff_id>_<10-char-uuid>.jpg` ✅
+
+**Cara B — Via `curl` (sanity check backend)**
+
+```bash
+curl -X GET https://laundrymax-api.onrender.com/api/attendance?limit=5 \
+  | python3 -m json.tool
+```
+
+Field `selfie_url` sekarang harus berbentuk:
+```
+https://<account_id>.r2.cloudflarestorage.com/laundrymax-photos/attendance/xxx.jpg?X-Amz-Algorithm=...&X-Amz-Signature=...&X-Amz-Expires=900
+```
+
+Kalau URL-nya berbentuk `/api/uploads/attendance/...` berarti env var belum ke-load — cek Render logs.
+
+**Cara C — Buka presigned URL di browser**
+
+Copy `selfie_url` dari response (Cara B) → paste ke browser tab baru → foto harus terbuka. URL akan expired otomatis setelah 15 menit — normal.
+
+**Cara D — Backend logs**
+
+Render → service → tab **Logs** → cari baris:
+```
+INFO storage: R2 uploaded key=attendance/staff1_xxx.jpg size=487321
+```
+Kalau muncul → R2 aktif. Kalau tidak muncul (dan cuma ada write ke disk) → env var belum ke-load.
+
+### 13.5 Data Lama (`/api/uploads/...`) Tetap Jalan
+
+Baris data lama di MongoDB masih menyimpan URL berbentuk `/api/uploads/attendance/xxx.jpg`. `resolve_url()` mendeteksi prefix ini dan mengembalikan URL apa adanya — jadi foto lama tetap tampil dari disk Render (sampai redeploy berikutnya). Kalau butuh migrasi foto lama ke R2, kita bisa tulis one-off script `backend/scripts/migrate_local_to_r2.py` — bilang aja kapan mau eksekusi.
+
+### 13.6 Retention (opsional)
+
+Selfie 90 hari cukup untuk audit HR, PoD 180 hari cukup untuk claim customer. Set lifecycle rule di R2:
+
+1. R2 bucket → tab **Settings** → **Object lifecycle rules** → **Add rule**.
+2. Rule 1: prefix `attendance/` · Action: **Delete objects** · Age: **90 days**.
+3. Rule 2: prefix `pod/` · Action: **Delete objects** · Age: **180 days**.
+
+Otomatis bersih sendiri tanpa cron job.
+
+### 13.7 Troubleshooting R2
+
+| Gejala | Penyebab | Fix |
+|---|---|---|
+| Foto absensi upload sukses tapi file tidak muncul di bucket | Env var salah / typo | Render → Environment → cek tidak ada whitespace atau salah huruf besar-kecil |
+| Response `selfie_url` masih `/api/uploads/...` | Salah satu dari 4 R2 vars kosong | `is_r2_enabled()` butuh **semua 4** var terisi |
+| Error `SignatureDoesNotMatch` | Access Key & Secret Key ke-tukar | Cek ulang dari halaman API Token |
+| Browser buka presigned URL: `AccessDenied` | Token gak punya Object Read permission | Buat ulang API token dengan **Object Read & Write** |
+| Backend log: `EndpointConnectionError` | Account ID salah / typo | Format: 32 char hex, tidak ada dash |
+| Foto lama hilang setelah Render redeploy | Belum di-migrate ke R2 | Cara: tulis script migrasi (§13.5) — sebelum redeploy berikutnya |
 
 ---
 

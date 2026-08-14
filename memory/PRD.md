@@ -22,6 +22,15 @@ Mobile-first three-role ops app + Admin Command Center for a laundry business "L
 - **Superadmin** — monitor KPI, atur multi-tier pricing, lihat laporan pegawai, monitor kuota B2B.
 
 ## What's Been Implemented
+### P0 — Cloudflare R2 Photo Storage — iter_24 100%
+Hybrid uploader: R2 in prod, local disk in dev/preview. **Zero-code deploy switch** — activates when 4 env vars set on Render.
+- `backend/storage.py` (NEW): `is_r2_enabled()`, `make_object_key()`, `save_image_bytes()`, `resolve_url()`, `delete_object()` — all async, all with local-disk fallback.
+- `routes/staff_attendance.py`: `POST /clock-in` uploads via `save_image_bytes`; `GET /attendance` + clock-out hydrate `selfie_url` via `resolve_url`.
+- `routes/orders.py`: `POST /orders/{id}/pod` uploads via `save_image_bytes`; new `_hydrate_pod_urls` helper resolves `pod_urls[]` on all Order responses (list, get, patch status, upload).
+- MongoDB now stores **bare object keys** (`attendance/staff1_abc.jpg`); URLs are generated fresh at read time (presigned R2 in prod, `/api/uploads/...` local). Legacy `/api/uploads/...` DB values pass through untouched.
+- `DEPLOYMENT.md §13`: full owner-facing R2 setup guide + 4 verification methods + troubleshooting matrix.
+- 93 backend pytest GREEN + 1 R2 conditional smoke skip (auto-runs when creds present).
+
 ### MVP v1.0 — Deployment Ready — iter_23 100%
 Repository prepared for production deployment to MongoDB Atlas + Render/Railway (backend) + Vercel (frontend).
 - **`/app/DEPLOYMENT.md`** — full step-by-step owner-facing guide: Atlas setup, env-var contract, Render backend deploy, Vercel frontend deploy, CORS wiring, post-deploy smoke checklist, free-tier limits, troubleshooting matrix.
