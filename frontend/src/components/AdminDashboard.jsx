@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   Tags,
@@ -14,10 +14,12 @@ import {
   X,
   Mail,
   Receipt,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import HeaderNav from "@/components/HeaderNav";
 import { useAuth } from "@/lib/AuthContext";
+import { fetchOrders } from "@/lib/api";
 import PricingTable from "@/components/admin/PricingTable";
 import B2BQuotas from "@/components/admin/B2BQuotas";
 import StaffPerformance, {
@@ -36,47 +38,66 @@ const SIDEBAR_ITEMS = [
   { id: "b2b", label: "Kuota B2B", Icon: Building2 },
 ];
 
-const KPIS = [
-  {
-    id: "revenue",
-    label: "Total Pendapatan Hari Ini",
-    value: "Rp 4.820.000",
-    delta: "+12.4%",
-    deltaPositive: true,
-    Icon: Wallet,
-    accent: "#FFD700",
-  },
-  {
-    id: "kg",
-    label: "Cucian Selesai (Kg)",
-    value: "182.5 Kg",
-    delta: "+8.2%",
-    deltaPositive: true,
-    Icon: Scale,
-    accent: "#3DA5FF",
-  },
-  {
-    id: "showcase",
-    label: "Penjualan Gas / Showcase",
-    value: "Rp 460.000",
-    delta: "−3.1%",
-    deltaPositive: false,
-    Icon: ShoppingBag,
-    accent: "#7DF08F",
-  },
-  {
-    id: "pending",
-    label: "Cucian Menunggu",
-    value: "23 Order",
-    delta: "+5",
-    deltaPositive: false,
-    Icon: Hourglass,
-    accent: "#FF8A3D",
-  },
-];
+const formatIDR = (n) =>
+  "Rp " + Math.round(n).toLocaleString("id-ID").replace(/,/g, ".");
+
+function isToday(iso) {
+  if (!iso) return false;
+  const d = new Date(iso);
+  const t = new Date();
+  return (
+    d.getFullYear() === t.getFullYear() &&
+    d.getMonth() === t.getMonth() &&
+    d.getDate() === t.getDate()
+  );
+}
+
+function buildKpis(orders) {
+  const todays = orders.filter((o) => isToday(o.created_at));
+  const revenue = todays
+    .filter((o) => o.payment_status === "Lunas")
+    .reduce((s, o) => s + (Number(o.total_price) || 0), 0);
+  const totalKg = todays.reduce((s, o) => s + (Number(o.weight_kg) || 0), 0);
+  const showcase = todays
+    .filter((o) => (o.items_detail || "").toLowerCase().includes("showcase"))
+    .reduce((s, o) => s + (Number(o.total_price) || 0), 0);
+  const pending = orders.filter((o) =>
+    ["Antrian", "Cuci", "Kering", "Setrika", "Packing"].includes(o.order_status)
+  ).length;
+  return [
+    {
+      id: "revenue",
+      label: "Total Pendapatan Hari Ini",
+      value: formatIDR(revenue),
+      Icon: Wallet,
+      accent: "#FFD700",
+    },
+    {
+      id: "kg",
+      label: "Cucian Selesai (Kg)",
+      value: `${totalKg.toFixed(1)} Kg`,
+      Icon: Scale,
+      accent: "#3DA5FF",
+    },
+    {
+      id: "showcase",
+      label: "Penjualan Gas / Showcase",
+      value: formatIDR(showcase),
+      Icon: ShoppingBag,
+      accent: "#7DF08F",
+    },
+    {
+      id: "pending",
+      label: "Cucian Menunggu",
+      value: `${pending} Order`,
+      Icon: Hourglass,
+      accent: "#FF8A3D",
+    },
+  ];
+}
 
 function KpiCard({ kpi, idx }) {
-  const { label, value, delta, deltaPositive, Icon, accent } = kpi;
+  const { label, value, Icon, accent } = kpi;
   return (
     <div
       className="glass rounded-2xl p-5 relative overflow-hidden animate-fade-up hover:border-[#FFD700]/30 transition-colors"
@@ -97,15 +118,6 @@ function KpiCard({ kpi, idx }) {
         >
           <Icon size={18} style={{ color: accent }} strokeWidth={2.25} />
         </div>
-        <span
-          className={`px-2 py-0.5 rounded-full text-[10px] font-heading font-bold ${
-            deltaPositive
-              ? "bg-[#7DF08F]/15 text-[#B4F5BF] border border-[#7DF08F]/30"
-              : "bg-[#FF6B6B]/15 text-[#FFA8A8] border border-[#FF6B6B]/30"
-          }`}
-        >
-          {delta}
-        </span>
       </div>
       <div className="relative mt-4">
         <div className="text-white/50 text-[11px] uppercase tracking-widest font-medium">
@@ -120,6 +132,31 @@ function KpiCard({ kpi, idx }) {
 }
 
 function OverviewView() {
+  const [kpis, setKpis] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const rows = await fetchOrders({ limit: 500 });
+        setKpis(buildKpis(rows || []));
+      } catch (e) {
+        toast.error("Gagal memuat KPI", { description: e.message });
+        setKpis(buildKpis([]));
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const dateLabel = new Date().toLocaleDateString("id-ID", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+
   return (
     <div className="space-y-6">
       <div>
@@ -130,18 +167,28 @@ function OverviewView() {
           Ringkasan Operasional
         </h1>
         <p className="text-white/50 text-sm mt-1">
-          Snapshot performa hari ini per Sabtu, 01 Maret 2026.
+          Snapshot performa {dateLabel}.
         </p>
       </div>
 
-      <div
-        className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
-        data-testid="kpi-grid"
-      >
-        {KPIS.map((kpi, i) => (
-          <KpiCard key={kpi.id} kpi={kpi} idx={i} />
-        ))}
-      </div>
+      {loading ? (
+        <div
+          className="glass rounded-2xl p-8 flex items-center justify-center gap-2 text-white/60"
+          data-testid="kpi-loading"
+        >
+          <Loader2 size={16} className="animate-spin" />
+          <span className="text-sm">Memuat KPI dari database...</span>
+        </div>
+      ) : (
+        <div
+          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
+          data-testid="kpi-grid"
+        >
+          {kpis.map((kpi, i) => (
+            <KpiCard key={kpi.id} kpi={kpi} idx={i} />
+          ))}
+        </div>
+      )}
 
       <StaffPerformanceChart />
       <OverdueWidget />

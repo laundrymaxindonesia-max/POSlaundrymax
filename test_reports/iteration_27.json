@@ -1,0 +1,43 @@
+{
+  "summary": "Verified iter-27 scope end-to-end: (a) POS Regular customer POST persists + reload autocomplete works with data-testid customer-search-result-{id} showing name/phone/address, (b) POS 'Mulai Order Baru' fully resets form state (customerName='', speedTier='reguler', paymentStatus='lunas', kiloanKg=0, evidence cleared, QR modal closed) — NO refresh required, (c) INITIAL_MEMBERS confirmed [] — no mock leak on POS, (d) Admin Overview KPI cards live from GET /api/orders (revenue=Rp 473.700 / kg=82.7 / showcase=Rp 0 / pending=24 — none of the old hardcoded 'Rp 4.820.000' or '182.5 Kg' values present), (e) Daftar Piutang widget renders 10 live rows from /api/orders?payment_status=Nanti with piutang-total=Rp 397.100, (f) StaffPerformanceChart shows 5 staff-bar-* cards from real order_events aggregation (Dedi, Siti, Erfa, Agus, Rina), (g) Laporan Pegawai table has 6 staff-row-* rows with columns Nama/Role/KG/Order (Jam Kerja correctly removed), (h) Admin > Kuota B2B renders 4 b2b-card-* from /api/b2b_quotas (Hotel Tamel, Laskita Kostel, Kost UNPAD, Kosan Wins) with 'Hampir Habis' badge on Laskita (285/300), (i) Courier Dashboard has zero 'Kosan Wins' hardcoded leak, (j) Production Scanner recent-scans list is live from /api/orders. Backend: 6/6 pytest passed (POST/GET /api/customers, 409 duplicate, /b2b_quotas seed, /staff, /orders?payment_status=Nanti, /orders?status=Packing).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "POSScreen.jsx RegularCustomerModal onSave (line ~1195)",
+        "issue": "Duplicate WA phone: backend returns 409 with body {detail: \"phone 'xxx' already exists\"}, but the client-side handler checks `/409/.test(err.message)` which never matches because api.js `unwrap()` OVERWRITES the initial `HTTP 409` message with the backend `detail` string. Result: user sees generic 'Gagal simpan pelanggan — phone \"xxx\" already exists' instead of the intended INFO toast 'Nomor WA sudah terdaftar — data lama dipakai'. Verified by attempting a duplicate save with the same phone → wrong toast copy shown, duplicate local hydration branch skipped.",
+        "selector": "handler in /app/frontend/src/components/POSScreen.jsx line 1195: if (/409/.test(err.message))",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pos_flow_iter27.py",
+    "/app/test_reports/pytest/iter27.xml"
+  ],
+  "action_items": [
+    "Fix POSScreen.jsx duplicate-phone 409 detection: either (a) change condition to `err.message.includes('already exists')` OR (b) have api.js `unwrap()` attach the status code to the thrown Error (e.g., `err.status = res.status`) and switch the check to `err.status === 409`. Approach (b) is cleaner and future-proof for other 409 endpoints (customers, prices, etc.)."
+  ],
+  "critical_code_review_comments": [
+    "api.js `unwrap()` throws a plain Error whose message is the backend `detail` string when JSON is returned — this deletes the HTTP status code information from the caller. Recommend attaching `err.status = res.status` and `err.body = j` so downstream code can branch on status instead of regex-parsing message text. Currently only POSScreen relies on 409 detection; adding this now prevents future duplicate-message bugs.",
+    "POSScreen.jsx resetAll() is complete and idempotent — all 20 state slots reset in one call. Nice work extending it to cover speedTier, evidencePhotos, paymentProof, customerSearchOpen, and the register modal drafts.",
+    "OverdueWidget.jsx correctly filters by payment_status=Nanti — but note there is NO server-side sorting by days overdue; the widget shows the first 10 from the newest-first order listing which may not surface the most-overdue debts. Consider `?sort=created_at:asc` support on /api/orders or sorting client-side by daysOverdue desc before slicing.",
+    "StaffPerformance.jsx computePerformance credits every event on an order to a staff once (uses Set on order_id) — good. Actor regex `/(?:kasir|kurir|produksi|staff|packing|operator)-(.+)$/` correctly handles the `getActorTag()` prefix format.",
+    "Production Scanner and Admin Piutang show customer names 'Budi Santoso' / 'Dedi Supardi' — these are BACKEND SEED customers in /app/backend/routes/seed.py lines 48-53 (not hardcoded frontend mocks). This is expected behavior — the review scope requires empty-state when DB has zero rows, and the frontend correctly renders whatever is in the DB. If the user wants these seed names removed, backend/routes/seed.py CUSTOMER_ROWS should be updated. Not a bug per this iteration's scope."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_pos_flow_iter27.py (new — 6 test regression suite for POS + Admin flows)"
+  ],
+  "success_rate": {"backend": "100% (6/6 pytest)", "frontend": "~92% (12/13 scoped checks — 409 toast wording is the only failure)"},
+  "test_credentials": "Admin owner: cookie session_token=test_session_iter27_1786921703310 seeded in mongodb user_sessions (email theomahrizal@gmail.com). Staff routes bypass with sessionStorage staff_pin_ok='true' + staff_pin_id/name/role.",
+  "seed_data_creation": "POST /api/seed/all executed — 35 orders (Antrian=5, Cuci=5, Kering=4, Setrika=5, Packing=4, OTW=4, Selesai=8), 4 B2B partners, 6 staff, 5 customers. Test also creates additional TEST_ / NewReg / UniqA-B / Dup customers via POST /api/customers.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter-27 verified live-DB wiring for Admin + POS reset flow. Only remaining issue is the 409 duplicate-phone toast copy in POSScreen.jsx line 1195 — trivially fixable by making api.js `unwrap()` attach status code to the Error object and switching the handler to `err.status===409`. Admin auth: mongo-seed a user_sessions row + set cookie session_token (see /app/auth_testing.md). B2B quota seed IDs: partner-tamel, partner-laskita, partner-unpad, partner-wins. Reset flow: onNewOrder prop in QrReceiptModal → POSScreen.resetAll() covers all 20+ state slots correctly.",
+  "rca of the issue": "409 duplicate WA toast: /app/frontend/src/lib/api.js `unwrap()` first sets `detail = 'HTTP 409'` but then if the JSON body has a `.detail` field it OVERWRITES with the backend text (e.g. \"phone '087721668417' already exists\"). The thrown Error.message therefore no longer contains '409'. The check `if (/409/.test(err.message))` in POSScreen.jsx line 1195 never matches, so the code falls through to the generic error toast and never hydrates the local regular customers list with the duplicate row. Fix: attach err.status = res.status inside unwrap() and switch the check to `err.status === 409`."
+}

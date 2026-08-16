@@ -1,27 +1,57 @@
-import { AlertCircle, MessageCircle } from "lucide-react";
-
-const PIUTANG_ORDERS = [
-  { id: "LND-006", customer: "Rina Permata", phone: "0821-1122-3344", amount: 30000, daysOverdue: 1 },
-  { id: "LND-007", customer: "Apartemen Gateway Pasteur", phone: "0813-9999-1212", amount: 76000, daysOverdue: 2 },
-  { id: "LND-009", customer: "Ahmad Subagja", phone: "0856-2233-4455", amount: 45000, daysOverdue: 3 },
-  { id: "LND-012", customer: "Citra Wibowo", phone: "0878-7766-8899", amount: 62000, daysOverdue: 5 },
-  { id: "LND-014", customer: "Hendra Gunawan", phone: "0822-5544-3322", amount: 28000, daysOverdue: 7 },
-];
+import { useEffect, useState } from "react";
+import { AlertCircle, MessageCircle, Loader2, CheckCheck } from "lucide-react";
+import { toast } from "sonner";
+import { fetchOrders } from "@/lib/api";
 
 const formatIDR = (n) =>
   "Rp " + Math.round(n).toLocaleString("id-ID").replace(/,/g, ".");
 
+function daysBetween(iso) {
+  if (!iso) return 0;
+  const then = new Date(iso).getTime();
+  return Math.max(0, Math.floor((Date.now() - then) / 86400000));
+}
+
 /**
  * OverdueWidget — "Daftar Piutang" card on Admin → Overview.
- * Lists "Bayar Nanti" orders that haven't been settled, with per-row WA
- * deep-link CTA that opens a billing-reminder template prefilled to the
- * customer's phone number.
+ *
+ * Lives off the real backend: fetches every order with `payment_status=Nanti`
+ * and treats them as outstanding debt regardless of production stage.
+ * Empty state renders a friendly "tidak ada piutang" card so ops know the
+ * data source is real.
  */
 export default function OverdueWidget() {
-  const totalPiutang = PIUTANG_ORDERS.reduce((s, o) => s + o.amount, 0);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const rows = await fetchOrders({
+          payment_status: "Nanti",
+          limit: 200,
+        });
+        const mapped = (rows || []).map((o) => ({
+          id: o.order_id,
+          customer: o.customer_name,
+          phone: o.customer_phone || "",
+          amount: Number(o.total_price) || 0,
+          daysOverdue: daysBetween(o.created_at),
+        }));
+        setOrders(mapped);
+      } catch (e) {
+        toast.error("Gagal memuat daftar piutang", { description: e.message });
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const totalPiutang = orders.reduce((s, o) => s + o.amount, 0);
 
   const handleWaTagihan = (order) => {
-    const phone = order.phone.replace(/\D/g, "");
+    const phone = (order.phone || "").replace(/\D/g, "");
     const msg = `Halo ${order.customer}, cucian LaundryMax (Order ${order.id}) sudah selesai. Total tagihan ${formatIDR(
       order.amount
     )}. Mohon segera dilunasi ya.`;
@@ -48,7 +78,7 @@ export default function OverdueWidget() {
               Daftar Piutang
             </h2>
             <p className="text-white/40 text-xs mt-0.5">
-              Order dengan status pembayaran "Bayar Nanti"
+              Order dengan status pembayaran "Bayar Nanti" · live dari database
             </p>
           </div>
         </div>
@@ -65,54 +95,78 @@ export default function OverdueWidget() {
         </div>
       </div>
 
-      <div className="mt-5 space-y-2" data-testid="piutang-list">
-        {PIUTANG_ORDERS.map((order, i) => (
-          <div
-            key={order.id}
-            data-testid={`piutang-row-${order.id}`}
-            className="rounded-xl bg-white/[0.03] border border-white/10 hover:border-[#FFD700]/30 hover:bg-white/[0.05] transition-colors p-3 flex items-center justify-between gap-3 animate-fade-up"
-            style={{ animationDelay: `${i * 40}ms` }}
-          >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-lg bg-[#FF8A3D]/10 border border-[#FF8A3D]/25 flex items-center justify-center text-[#FFB98C] font-heading font-bold text-sm flex-shrink-0">
-                {order.customer[0]}
-              </div>
-              <div className="min-w-0">
-                <div className="font-heading font-bold text-white text-sm truncate">
-                  {order.customer}
-                </div>
-                <div className="flex items-center gap-1.5 text-white/40 text-[11px] mt-0.5">
-                  <span className="font-mono">{order.id}</span>
-                  <span>·</span>
-                  <span
-                    className={
-                      order.daysOverdue > 5 ? "text-[#FF6B6B]" : "text-white/40"
-                    }
-                  >
-                    {order.daysOverdue} hari overdue
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="text-right hidden sm:block">
-                <div className="font-heading font-bold text-[#FFD700] text-sm">
-                  {formatIDR(order.amount)}
-                </div>
-              </div>
-              <button
-                onClick={() => handleWaTagihan(order)}
-                data-testid={`wa-tagihan-${order.id}`}
-                className="h-9 px-3 rounded-lg bg-[#25D366]/10 border border-[#25D366]/40 hover:bg-[#25D366]/20 hover:border-[#25D366]/70 text-[#25D366] font-heading font-bold text-[10px] uppercase tracking-widest flex items-center gap-1.5 transition-all active:scale-95"
-              >
-                <MessageCircle size={12} strokeWidth={2.5} />
-                <span className="hidden sm:inline">WA Tagihan</span>
-                <span className="sm:hidden">WA</span>
-              </button>
-            </div>
+      {loading ? (
+        <div
+          className="mt-5 flex items-center justify-center gap-2 py-6 text-white/60"
+          data-testid="piutang-loading"
+        >
+          <Loader2 size={14} className="animate-spin" />
+          <span className="text-xs">Memuat piutang...</span>
+        </div>
+      ) : orders.length === 0 ? (
+        <div
+          className="mt-5 flex flex-col items-center justify-center gap-1 py-8 text-white/50"
+          data-testid="piutang-empty"
+        >
+          <CheckCheck size={22} className="text-[#7DF08F]" />
+          <div className="font-heading font-bold text-white/70 text-sm mt-1">
+            Semua order lunas
           </div>
-        ))}
-      </div>
+          <div className="text-xs">Tidak ada piutang aktif saat ini.</div>
+        </div>
+      ) : (
+        <div className="mt-5 space-y-2" data-testid="piutang-list">
+          {orders.slice(0, 10).map((order, i) => (
+            <div
+              key={order.id}
+              data-testid={`piutang-row-${order.id}`}
+              className="rounded-xl bg-white/[0.03] border border-white/10 hover:border-[#FFD700]/30 hover:bg-white/[0.05] transition-colors p-3 flex items-center justify-between gap-3 animate-fade-up"
+              style={{ animationDelay: `${i * 40}ms` }}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-lg bg-[#FF8A3D]/10 border border-[#FF8A3D]/25 flex items-center justify-center text-[#FFB98C] font-heading font-bold text-sm flex-shrink-0">
+                  {(order.customer || "?")[0]}
+                </div>
+                <div className="min-w-0">
+                  <div className="font-heading font-bold text-white text-sm truncate">
+                    {order.customer}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-white/40 text-[11px] mt-0.5">
+                    <span className="font-mono">{order.id}</span>
+                    <span>·</span>
+                    <span
+                      className={
+                        order.daysOverdue > 5
+                          ? "text-[#FF6B6B]"
+                          : "text-white/40"
+                      }
+                    >
+                      {order.daysOverdue} hari overdue
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="text-right hidden sm:block">
+                  <div className="font-heading font-bold text-[#FFD700] text-sm">
+                    {formatIDR(order.amount)}
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleWaTagihan(order)}
+                  data-testid={`wa-tagihan-${order.id}`}
+                  disabled={!order.phone}
+                  className="h-9 px-3 rounded-lg bg-[#25D366]/10 border border-[#25D366]/40 hover:bg-[#25D366]/20 hover:border-[#25D366]/70 text-[#25D366] font-heading font-bold text-[10px] uppercase tracking-widest flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <MessageCircle size={12} strokeWidth={2.5} />
+                  <span className="hidden sm:inline">WA Tagihan</span>
+                  <span className="sm:hidden">WA</span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

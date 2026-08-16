@@ -158,35 +158,7 @@ export const MEMBER_SOURCE_OPTIONS = [
   { id: "umum", label: "Umum / Lainnya" },
 ];
 
-export const INITIAL_MEMBERS = [
-  {
-    name: "Budi Santoso",
-    wa: "0812-3456-7890",
-    tier: "Gold",
-    quotaKg: 25,
-    remainingKg: 12.5,
-    expiry: "18 Mei 2026",
-    source: "umum",
-  },
-  {
-    name: "Siti Rahayu",
-    wa: "0813-2345-6789",
-    tier: "Silver",
-    quotaKg: 20,
-    remainingKg: 8.0,
-    expiry: "22 April 2026",
-    source: "umum",
-  },
-  {
-    name: "Andi Wijaya",
-    wa: "0821-4567-8901",
-    tier: "Platinum",
-    quotaKg: 35,
-    remainingKg: 25.0,
-    expiry: "10 Juni 2026",
-    source: "umum",
-  },
-];
+export const INITIAL_MEMBERS = [];
 
 export const TIER_STYLE = {
   Silver: {

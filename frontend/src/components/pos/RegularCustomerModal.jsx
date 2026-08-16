@@ -27,9 +27,7 @@ export default function RegularCustomerModal({
     if (!w) return toast.error("Isi nomor WhatsApp dulu");
     if (!a) return toast.error("Isi alamat dulu");
     onSave({ name: n, wa: w, address: a });
-    toast.success("Data pelanggan reguler berhasil disimpan!", {
-      description: `${n} · ${w}`,
-    });
+    // Parent shows the success/error toast after the DB round-trip.
   };
 
   return (

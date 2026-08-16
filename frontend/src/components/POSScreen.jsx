@@ -546,8 +546,10 @@ export default function POSScreen() {
     : 0;
 
   const resetAll = () => {
+    // Customer + source
     setCustomerName("");
     setSumberOrder("walkin");
+    // Cart data
     setKiloanKg(0);
     setKiloanInput("0.0");
     setShowKiloanDetail(false);
@@ -555,11 +557,37 @@ export default function POSScreen() {
     setSatuanCounts({});
     setSepatuCounts({});
     setShowcaseCounts({});
+    setActiveTab("kiloan");
+    setSpeedTier("reguler");
+    // Evidence + payment
     setEvidencePhotos([]);
+    setPhotoModalOpen(false);
     setPaymentStatus("lunas");
     setPaymentProof(null);
+    setPaymentModalOpen(false);
+    // Receipt / order id
     setQrOpen(false);
-    setSpeedTier("reguler");
+    setOrderId("");
+    setReceiptRemainingKg(0);
+    setReceiptUsedMembership(false);
+    setReceiptMemberSnapshot(null);
+    // Search
+    setSearchQuery("");
+    setSearchOpen(false);
+    setTrackOrder(null);
+    setCustomerSearchOpen(false);
+    setCustomerSearchResults([]);
+    // Register-member modal draft
+    setRegisterOpen(false);
+    setRegName("");
+    setRegWa("");
+    setRegSource("tamel");
+    setRegSelectedTier("Gold");
+    // Register-regular modal draft
+    setRegCustOpen(false);
+    setRegCustName("");
+    setRegCustWa("");
+    setRegCustAddress("");
   };
 
   const qrPayload = JSON.stringify({
@@ -1134,29 +1162,49 @@ export default function POSScreen() {
         setWa={setRegCustWa}
         address={regCustAddress}
         setAddress={setRegCustAddress}
-        onSave={(entry) => {
-          setRegularCustomers((prev) => {
-            const idx = prev.findIndex((c) => c.name.toLowerCase() === entry.name.toLowerCase());
-            if (idx >= 0) {
-              const copy = [...prev];
-              copy[idx] = entry;
-              return copy;
-            }
-            return [...prev, entry];
-          });
-          setCustomerName(entry.name);
+        onSave={async (entry) => {
           setRegCustOpen(false);
-          // Persist to backend — swallow 409 (duplicate phone) silently
-          createCustomer({
-            name: entry.name,
-            phone: entry.wa || "",
-            address: entry.address || null,
-            type: "Regular",
-          }).catch((err) => {
-            if (!/409/.test(err.message)) {
-              console.warn("Gagal simpan customer ke backend:", err.message);
+          // Persist to backend FIRST so the DB is the source of truth
+          try {
+            const saved = await createCustomer({
+              name: entry.name,
+              phone: entry.wa || "",
+              address: entry.address || null,
+              type: "Regular",
+            });
+            const persisted = {
+              id: saved.id,
+              name: saved.name,
+              wa: saved.phone,
+              address: saved.address || "",
+            };
+            setRegularCustomers((prev) => {
+              const idx = prev.findIndex(
+                (c) => c.name.toLowerCase() === persisted.name.toLowerCase()
+              );
+              if (idx >= 0) {
+                const copy = [...prev];
+                copy[idx] = persisted;
+                return copy;
+              }
+              return [...prev, persisted];
+            });
+            setCustomerName(persisted.name);
+            toast.success(`Pelanggan ${persisted.name} tersimpan di database`);
+          } catch (err) {
+            if (err.status === 409) {
+              // Duplicate phone → still hydrate local state from typed entry
+              setRegularCustomers((prev) => {
+                if (prev.some((c) => c.name.toLowerCase() === entry.name.toLowerCase()))
+                  return prev;
+                return [...prev, entry];
+              });
+              setCustomerName(entry.name);
+              toast.info("Nomor WA sudah terdaftar — data lama dipakai");
+            } else {
+              toast.error("Gagal simpan pelanggan", { description: err.message });
             }
-          });
+          }
         }}
       />
     </div>

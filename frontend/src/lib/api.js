@@ -9,11 +9,15 @@ async function unwrap(res) {
   const text = await res.text();
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
+    let body = null;
     try {
-      const j = JSON.parse(text);
-      if (j?.detail) detail = j.detail;
+      body = JSON.parse(text);
+      if (body?.detail) detail = body.detail;
     } catch (e) { /* not JSON */ }
-    throw new Error(detail);
+    const err = new Error(detail);
+    err.status = res.status;
+    err.body = body;
+    throw err;
   }
   if (!text) return null;
   try {
@@ -122,5 +126,15 @@ export async function deductQuota(customerId, kg, reason) {
       body: JSON.stringify({ kg, reason }),
     })
   );
+}
+
+// ---------- B2B quotas ----------
+export async function fetchB2BQuotas() {
+  return unwrap(await fetch(`${API}/b2b_quotas`));
+}
+
+// ---------- Staff ----------
+export async function fetchStaff() {
+  return unwrap(await fetch(`${API}/staff`));
 }
 
