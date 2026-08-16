@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   Mail,
+  Receipt,
 } from "lucide-react";
 import { toast } from "sonner";
 import HeaderNav from "@/components/HeaderNav";
@@ -23,12 +24,14 @@ import StaffPerformance, {
   StaffPerformanceChart,
 } from "@/components/admin/StaffPerformance";
 import OverdueWidget from "@/components/admin/OverdueWidget";
+import ReceiptSettings from "@/components/admin/ReceiptSettings";
 
 const ADMIN_EMAIL = "theomahrizal@gmail.com";
 
 const SIDEBAR_ITEMS = [
   { id: "overview", label: "Overview", Icon: LayoutDashboard },
   { id: "pricing", label: "Pengaturan Harga", Icon: Tags },
+  { id: "receipts", label: "Pengaturan Nota", Icon: Receipt },
   { id: "staff", label: "Laporan Pegawai", Icon: Users },
   { id: "b2b", label: "Kuota B2B", Icon: Building2 },
 ];
@@ -161,6 +164,8 @@ export default function AdminDashboard() {
     switch (activeView) {
       case "pricing":
         return <PricingTable />;
+      case "receipts":
+        return <ReceiptSettings />;
       case "staff":
         return <StaffPerformance />;
       case "b2b":

@@ -5,10 +5,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Printer, Clock } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Printer, Clock, Tag, ClipboardList, FileText } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 import { toast } from "sonner";
 import { SOURCE_OPTIONS, TIER_STYLE, formatIDR } from "@/components/pos/data";
+import { fetchReceiptSettings } from "@/lib/api";
+import { printReceipt } from "@/lib/receiptPrinter";
 
 export default function QrReceiptModal({
   open,
@@ -24,7 +27,31 @@ export default function QrReceiptModal({
   receiptRemainingKg,
   qrPayload,
   onNewOrder,
+  // Optional rich snapshot for real receipt printing (falls back to
+  // just showing the QR modal if the caller doesn't provide it).
+  printPayload,
 }) {
+  const [settings, setSettings] = useState(null);
+  useEffect(() => {
+    if (open) fetchReceiptSettings().then(setSettings);
+  }, [open]);
+
+  const handlePrint = (model) => {
+    if (!printPayload) {
+      toast.error("Data cetak belum siap");
+      return;
+    }
+    const w = printReceipt(printPayload, model, settings);
+    if (!w) {
+      toast.error("Pop-up diblokir browser", {
+        description: "Izinkan pop-up untuk domain ini.",
+      });
+    } else {
+      const label = model === "customer" ? "pelanggan" : model === "production" ? "produksi" : "bag tag";
+      toast.success(`Nota ${label} dicetak`);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-[#111111] border-white/10 text-white max-w-sm rounded-3xl">
@@ -99,25 +126,42 @@ export default function QrReceiptModal({
             )}
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button
-            onClick={() => toast.success("Struk dicetak")}
-            className="flex-1 h-12 rounded-xl bg-[#FFD700] text-black font-heading font-bold hover:bg-[#ffdf33] transition-colors flex items-center justify-center gap-2 active:scale-95"
-            data-testid="print-receipt-button"
+            onClick={() => handlePrint("customer")}
+            data-testid="print-customer-button"
+            className="h-16 rounded-xl bg-[#FFD700] text-black font-heading font-bold text-[10px] tracking-wider hover:bg-[#ffdf33] transition-colors flex flex-col items-center justify-center gap-1 active:scale-95"
           >
-            <Printer size={16} /> Cetak
+            <FileText size={16} />
+            NOTA<br />PELANGGAN
           </button>
           <button
-            onClick={() => {
-              onNewOrder();
-              toast.success("Transaksi baru siap");
-            }}
-            className="flex-1 h-12 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors"
-            data-testid="new-order-button"
+            onClick={() => handlePrint("production")}
+            data-testid="print-production-button"
+            className="h-16 rounded-xl bg-white/5 border border-white/15 text-white font-heading font-bold text-[10px] tracking-wider hover:border-[#FFD700]/40 hover:bg-[#FFD700]/10 transition-colors flex flex-col items-center justify-center gap-1 active:scale-95"
           >
-            Order Baru
+            <ClipboardList size={16} />
+            SLIP<br />PRODUKSI
+          </button>
+          <button
+            onClick={() => handlePrint("bagtag")}
+            data-testid="print-bagtag-button"
+            className="h-16 rounded-xl bg-white/5 border border-white/15 text-white font-heading font-bold text-[10px] tracking-wider hover:border-[#FFD700]/40 hover:bg-[#FFD700]/10 transition-colors flex flex-col items-center justify-center gap-1 active:scale-95"
+          >
+            <Tag size={16} />
+            LABEL<br />BAG
           </button>
         </div>
+        <button
+          onClick={() => {
+            onNewOrder();
+            toast.success("Transaksi baru siap");
+          }}
+          className="w-full h-11 mt-2 rounded-xl bg-white/[0.04] border border-white/10 text-white/70 font-medium hover:bg-white/10 hover:text-white transition-colors"
+          data-testid="new-order-button"
+        >
+          Mulai Order Baru
+        </button>
       </DialogContent>
     </Dialog>
   );

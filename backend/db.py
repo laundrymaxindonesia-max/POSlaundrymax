@@ -29,6 +29,7 @@ prices_col = db["prices"]
 b2b_quotas_col = db["b2b_quotas"]
 staff_col = db["staff"]
 attendance_col = db["attendance"]
+receipt_settings_col = db["receipt_settings"]
 
 
 async def ping() -> bool:

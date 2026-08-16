@@ -572,6 +572,78 @@ export default function POSScreen() {
     ts: Date.now(),
   });
 
+  // Rich payload for thermal print (Model A/B/C) — snapshot of current form.
+  // Recomputed on each render so the SIMPAN → print click always uses fresh
+  // state; the modal caches it internally after open.
+  const printPayload = useMemo(() => {
+    const speedLabel = SPEED_TIER_LABEL[speedTier] || "";
+    const items = [];
+    if (kiloanKg > 0) {
+      items.push({
+        name: `Cuci Kiloan · ${speedLabel}`,
+        qty: `${kiloanKg.toFixed(1)} kg`,
+        subtotal: kiloanKg * kiloanRate,
+      });
+    }
+    const pushCountedItems = (source, defs, multiplier) => {
+      defs.forEach((d) => {
+        const c = source[d.id] || 0;
+        if (c > 0) {
+          items.push({
+            name: `${d.name}${multiplier !== 1 ? ` (${speedLabel})` : ""}`,
+            qty: `${c} pcs`,
+            subtotal: c * d.price * multiplier,
+          });
+        }
+      });
+    };
+    pushCountedItems(satuanCounts, SATUAN_ITEMS, speedMultiplier);
+    pushCountedItems(sepatuCounts, SEPATU_ITEMS, speedMultiplier);
+    pushCountedItems(showcaseCounts, SHOWCASE_ITEMS, 1);
+    return {
+      id: orderId,
+      customer: customerName,
+      phone: customerPhone || "",
+      cashier: (getCurrentStaff()?.name) || "-",
+      dateLabel: new Date().toLocaleString("id-ID", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      speedTier,
+      serviceLabel:
+        kiloanKg > 0 ? `Cuci Kiloan · ${speedLabel}` : "Satuan / Sepatu",
+      items_detail: items.map((i) => `${i.qty} ${i.name}`).join(", "),
+      weight_kg: kiloanKg || null,
+      notes: "",
+      qrPayload: orderId,
+      paymentStatus,
+      bagIndex: 1,
+      bagTotal: 1,
+      items,
+      subtotal,
+      discount,
+      total,
+    };
+  }, [
+    orderId,
+    customerName,
+    customerPhone,
+    kiloanKg,
+    kiloanRate,
+    satuanCounts,
+    sepatuCounts,
+    showcaseCounts,
+    speedTier,
+    speedMultiplier,
+    subtotal,
+    discount,
+    total,
+    paymentStatus,
+  ]);
+
   // Search
   const searchResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -1027,6 +1099,7 @@ export default function POSScreen() {
         receiptMemberSnapshot={receiptMemberSnapshot}
         receiptRemainingKg={receiptRemainingKg}
         qrPayload={qrPayload}
+        printPayload={printPayload}
         onNewOrder={resetAll}
       />
 

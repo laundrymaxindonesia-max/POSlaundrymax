@@ -34,10 +34,13 @@ import {
 } from "@/lib/orderStore";
 import {
   fetchOrders,
+  fetchReceiptSettings,
   patchOrderStatus,
   uploadPod,
 } from "@/lib/api";
 import { getActorTag, getCurrentStaff } from "@/lib/staffSession";
+import { printReceipt } from "@/lib/receiptPrinter";
+import { Printer as PrinterIcon, FileText, ClipboardList, Tag } from "lucide-react";
 
 const INITIAL_MANIFEST = [
   { id: "LND-011", customer: "Tamel", weight: "2.5 kg", time: "11:02" },
@@ -121,6 +124,48 @@ function mapBackendOrder(o) {
   };
 }
 
+/** Build a receiptPrinter-compatible payload from a Courier order row.
+ *  Uses `_raw` (backend record) when available to pull speedTier + subtotal;
+ *  falls back to string-total for offline-cached rows. */
+function buildCourierPrintPayload(order) {
+  const raw = order._raw || {};
+  const detail = raw.items_detail || order.items || "";
+  const speed = /express/i.test(detail)
+    ? "express"
+    : /flash/i.test(detail)
+      ? "flash"
+      : "reguler";
+  const totalNum =
+    Number(raw.total_price) ||
+    Number(String(order.total || "").replace(/[^\d]/g, "")) ||
+    0;
+  return {
+    id: order.id,
+    customer: order.customer,
+    phone: order.phone,
+    dateLabel: new Date().toLocaleString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    speedTier: speed,
+    serviceLabel: detail || "-",
+    items_detail: detail,
+    weight_kg: raw.weight_kg || undefined,
+    notes: raw.notes || "",
+    qrPayload: order.id,
+    paymentStatus: order.paymentStatus,
+    bagIndex: 1,
+    bagTotal: 1,
+    items: [{ name: detail || "Cucian", qty: raw.weight_kg ? `${raw.weight_kg} kg` : "1", subtotal: totalNum }],
+    subtotal: totalNum,
+    discount: 0,
+    total: totalNum,
+  };
+}
+
 export default function CourierDashboard() {
   const [activeTab, setActiveTab] = useState("pickup");
   const [manifest, setManifest] = useState(INITIAL_MANIFEST);
@@ -140,6 +185,13 @@ export default function CourierDashboard() {
   const [podCaptured, setPodCaptured] = useState(false);
   const [podPaymentCaptured, setPodPaymentCaptured] = useState(false);
   const [podSubmitting, setPodSubmitting] = useState(false);
+
+  // Reprint receipt (mini-modal, shared between ready & on-motor cards)
+  const [receiptSettings, setReceiptSettings] = useState(null);
+  const [reprintOrder, setReprintOrder] = useState(null);
+  useEffect(() => {
+    fetchReceiptSettings().then(setReceiptSettings);
+  }, []);
   // Which live-camera panel is currently open (null when the outer PoD dialog
   // is showing the two "step" buttons).
   const [activeCameraKind, setActiveCameraKind] = useState(null);
@@ -614,13 +666,22 @@ export default function CourierDashboard() {
                           </div>
                         </div>
                       </div>
-                      <div className="text-right flex-shrink-0">
+                      <div className="text-right flex-shrink-0 flex flex-col items-end gap-1">
                         <div className="font-mono text-[#FFD700] text-xs font-heading font-bold">
                           {order.total}
                         </div>
-                        <div className="text-white/30 text-[9px] uppercase tracking-wider mt-0.5">
+                        <div className="text-white/30 text-[9px] uppercase tracking-wider">
                           {order.eta}
                         </div>
+                        <button
+                          onClick={() => setReprintOrder(order)}
+                          data-testid={`reprint-ready-${order.id}`}
+                          title="Cetak ulang nota"
+                          className="mt-0.5 h-7 px-2 rounded-lg bg-white/5 border border-white/10 hover:border-[#FFD700]/40 hover:bg-[#FFD700]/10 text-white/70 hover:text-[#FFD700] flex items-center gap-1 transition-colors"
+                        >
+                          <PrinterIcon size={11} strokeWidth={2.25} />
+                          <span className="text-[9px] font-heading font-bold tracking-wider uppercase">Cetak</span>
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -735,7 +796,15 @@ export default function CourierDashboard() {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-[auto_1fr_1fr] gap-2">
+                        <button
+                          onClick={() => setReprintOrder(order)}
+                          data-testid={`reprint-motor-${order.id}`}
+                          title="Cetak ulang nota"
+                          className="h-12 w-12 rounded-xl border border-white/10 bg-white/5 hover:border-[#FFD700]/40 hover:bg-[#FFD700]/10 text-white/70 hover:text-[#FFD700] flex items-center justify-center transition-all active:scale-[0.97]"
+                        >
+                          <PrinterIcon size={16} strokeWidth={2.25} />
+                        </button>
                         <button
                           onClick={() => {
                             const phone = (order.phone || "").replace(/\D/g, "");
@@ -1020,6 +1089,62 @@ export default function CourierDashboard() {
             >
               <CheckCircle2 size={16} /> Selesai
             </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reprint mini-modal — shared between ready-card & motor-card
+          "Cetak" buttons. Offers the same 3 templates as POS. */}
+      <Dialog
+        open={reprintOrder !== null}
+        onOpenChange={(o) => !o && setReprintOrder(null)}
+      >
+        <DialogContent
+          className="bg-[#111111] border-white/10 text-white max-w-xs rounded-3xl"
+          data-testid="reprint-modal"
+        >
+          <DialogHeader>
+            <DialogTitle className="font-heading font-bold text-[#FFD700] text-lg flex items-center gap-2">
+              <PrinterIcon size={18} /> Cetak Ulang Nota
+            </DialogTitle>
+            <DialogDescription className="text-white/50 text-xs">
+              {reprintOrder?.id} · {reprintOrder?.customer}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-2">
+            {[
+              { id: "customer", label: "Nota Pelanggan", desc: "Detail + harga + QR", Icon: FileText },
+              { id: "production", label: "Slip Produksi", desc: "Tanpa harga · fokus item", Icon: ClipboardList },
+              { id: "bagtag", label: "Label Bag / Pack", desc: "Minimal · tempel di tas", Icon: Tag },
+            ].map(({ id, label, desc, Icon }) => (
+              <button
+                key={id}
+                onClick={() => {
+                  const payload = buildCourierPrintPayload(reprintOrder);
+                  const w = printReceipt(payload, id, receiptSettings);
+                  if (!w) {
+                    toast.error("Pop-up diblokir browser", {
+                      description: "Izinkan pop-up untuk domain ini.",
+                    });
+                  } else {
+                    toast.success(`Nota ${label} dicetak`);
+                    setReprintOrder(null);
+                  }
+                }}
+                data-testid={`reprint-model-${id}`}
+                className="text-left rounded-xl border border-white/10 hover:border-[#FFD700]/40 bg-white/[0.03] hover:bg-[#FFD700]/[0.06] p-3 transition-all flex items-center gap-3 active:scale-[0.98]"
+              >
+                <div className="w-9 h-9 rounded-lg bg-[#FFD700]/15 border border-[#FFD700]/30 flex items-center justify-center flex-shrink-0">
+                  <Icon size={15} className="text-[#FFD700]" strokeWidth={2.25} />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-heading font-bold text-white text-sm">
+                    {label}
+                  </div>
+                  <div className="text-white/40 text-[10px]">{desc}</div>
+                </div>
+              </button>
+            ))}
           </div>
         </DialogContent>
       </Dialog>

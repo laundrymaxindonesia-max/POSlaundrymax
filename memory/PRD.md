@@ -22,7 +22,21 @@ Mobile-first three-role ops app + Admin Command Center for a laundry business "L
 - **Superadmin** — monitor KPI, atur multi-tier pricing, lihat laporan pegawai, monitor kuota B2B.
 
 ## What's Been Implemented
-### P1 — Reusable Live Camera + Geotagging — iter_25 100%
+### P0 — Dynamic Thermal Receipt System — iter_26 100%
+Owner-configurable thermal receipt layout + 3 print templates across POS & Courier.
+- **NEW backend** `models/receipt_settings.py` + `routes/receipt_settings.py`: singleton doc (id="default") with GET (auto-seed) + PUT (sanitize header_order — de-dupes + appends missing known slots). Fields: `header_order[]`, `store_name`, `store_address`, `store_phone`, `footer_message`, `paper_width` (58mm|80mm regex).
+- **NEW frontend** `lib/receiptPrinter.js`: `printReceipt(order, model, settings)` opens a print window with `@page {size:58mm|80mm auto}` self-contained HTML + monospace font. Three templates:
+  - `customer` (Model A) — Speed banner + QR + logo header, items table with prices, LUNAS/PIUTANG stamp, footer tagline.
+  - `production` (Model B) — Same header stack, items **without prices**, big NOTES box, "SLIP PRODUKSI · JANGAN DIBERIKAN KE PELANGGAN".
+  - `bagtag` (Model C) — Speed banner + massive customer name + BAG N/M box + small QR. No logo/prices/footer.
+  - QR renders via `api.qrserver.com` inline `<img>` (no dep). `@page size: {paper_width} auto` + centered content width (48mm/72mm).
+- **NEW admin panel** `components/admin/ReceiptSettings.jsx` (under Admin → Master Data → Pengaturan Nota): drag header slots via ArrowUp/ArrowDown, edit store info fields, toggle 58/80mm, 3 preview buttons. Save persists via PUT and toasts.
+- **POS wiring** `components/pos/QrReceiptModal.jsx`: after order save the QR modal exposes 3 tap buttons (`print-customer-button`, `-production-button`, `-bagtag-button`). `POSScreen.jsx` builds `printPayload` useMemo with speedTier + itemized cart + phone + notes and passes it to the modal.
+- **Courier wiring** `components/CourierDashboard.jsx`: single "Cetak" icon on every ready-card (`reprint-ready-{id}`) and motor-card (`reprint-motor-{id}`) opens a shared `reprint-modal` with the 3 template options. `buildCourierPrintPayload` derives speedTier from `items_detail` text.
+- **Backend tests** 5/5 GREEN in `tests/test_receipt_settings.py` (GET auto-seed, PUT persist, dedupe, append missing slots, reject invalid paper_width). Frontend E2E verified admin persistence across reload + preview HTML rendering + courier reprint modal (testing_agent_v3_fork iter_26 = 100%).
+- **Known minor** PUT with `header_order=[]` currently silently fills defaults instead of returning 422 — safer UX behavior, non-blocking.
+
+
 Replaced all mock canvas / setTimeout selfies with a single reusable `CameraCapture` component using real `getUserMedia` + `navigator.geolocation`. Wired into 3 flows: attendance kiosk, POS evidence & payment proof, courier PoD.
 - **NEW** `frontend/src/lib/geolocation.js` — promise wrapper around navigator.geolocation with Indonesian error UX.
 - **NEW** `frontend/src/components/CameraCapture.jsx` — full-screen live viewfinder, flip camera, timestamp watermark baked into JPEG, GPS pill overlay, file-input fallback for restricted browsers.

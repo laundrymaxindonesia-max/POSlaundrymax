@@ -72,6 +72,25 @@ export async function uploadPod(orderId, { actor, kind = "delivery", photo, lat,
   );
 }
 
+/** GET /api/receipt-settings — returns the singleton settings row.
+ *  Always resolves (falls back to a static default if the API is down)
+ *  so print never throws for a network glitch. */
+export async function fetchReceiptSettings() {
+  try {
+    return unwrap(await fetch(`${API}/receipt-settings`));
+  } catch (e) {
+    console.warn("receipt-settings fetch failed, using default:", e.message);
+    return {
+      header_order: ["speed", "qr", "logo"],
+      store_name: "LAUNDRYMAX",
+      store_address: "Jl. Contoh No. 1, Bandung",
+      store_phone: "0812-3456-7890",
+      footer_message: "Terima kasih!",
+      paper_width: "58mm",
+    };
+  }
+}
+
 // ---------- Prices ----------
 export async function fetchPrices() {
   return unwrap(await fetch(`${API}/prices`));

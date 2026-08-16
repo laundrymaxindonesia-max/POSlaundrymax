@@ -32,6 +32,7 @@ from routes.customers import router as customers_router
 from routes.b2b_quotas import router as b2b_quotas_router
 from routes.staff_attendance import router as staff_attendance_router
 from routes.seed import router as seed_router
+from routes.receipt_settings import router as receipt_settings_router
 
 
 # ---------------- FastAPI app ----------------
@@ -100,6 +101,7 @@ app.include_router(customers_router, prefix="/api")
 app.include_router(b2b_quotas_router, prefix="/api")
 app.include_router(staff_attendance_router, prefix="/api")
 app.include_router(seed_router, prefix="/api")
+app.include_router(receipt_settings_router, prefix="/api")
 
 # Static files for uploaded selfies etc. Mounted under /api/uploads so the
 # Kubernetes ingress (which only forwards /api/* to the backend) serves them.
