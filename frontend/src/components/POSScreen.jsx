@@ -603,7 +603,7 @@ export default function POSScreen() {
     return {
       id: orderId,
       customer: customerName,
-      phone: customerPhone || "",
+      phone: customerProfile?.wa || activeMember?.wa || "",
       cashier: (getCurrentStaff()?.name) || "-",
       dateLabel: new Date().toLocaleString("id-ID", {
         day: "2-digit",
@@ -630,7 +630,8 @@ export default function POSScreen() {
   }, [
     orderId,
     customerName,
-    customerPhone,
+    customerProfile,
+    activeMember,
     kiloanKg,
     kiloanRate,
     satuanCounts,
