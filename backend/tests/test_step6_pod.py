@@ -106,3 +106,66 @@ class TestPodUpload:
         assert r.status_code == 200, r.text
         url = r.json()["pod_urls"][-1]
         assert "_payment_" in url
+
+    def test_pod_upload_evidence_kind_with_geotag(self, sample_order_id):
+        """kind='evidence' + lat/lng Form fields must land on the event doc in Mongo.
+
+        NOTE: OrderEvent Pydantic model has extra='ignore', so kind/geotag_lat/lng
+        are stripped from the JSON response. We assert against Mongo directly.
+        """
+        import pymongo
+        from pathlib import Path
+        env = {}
+        for line in Path("/app/backend/.env").read_text().splitlines():
+            if "=" in line and not line.strip().startswith("#"):
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip().strip('"')
+        client = pymongo.MongoClient(env["MONGO_URL"])
+        col = client[env["DB_NAME"]]["orders"]
+
+        png = _tiny_png()
+        files = {"photo": ("evi.png", io.BytesIO(png), "image/png")}
+        data = {"actor": "kasir-erfa", "kind": "evidence", "lat": "-6.9", "lng": "107.6"}
+        r = requests.post(f"{API}/orders/{sample_order_id}/pod", data=data, files=files)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert len(body["pod_urls"]) >= 1
+        url = body["pod_urls"][-1]
+        assert "_evidence_" in url, url
+
+        # Assert Mongo doc has the raw event with kind + geotag
+        doc = col.find_one({"order_id": sample_order_id}, {"order_events": 1, "_id": 0})
+        matching = [
+            ev for ev in doc["order_events"]
+            if ev.get("kind") == "pod:evidence"
+            and ev.get("geotag_lat") == -6.9
+            and ev.get("geotag_lng") == 107.6
+        ]
+        assert matching, f"no evidence event with geotag found in {doc['order_events'][-3:]}"
+
+    def test_pod_upload_no_geotag_backward_compat(self, sample_order_id):
+        """Without lat/lng, event doc in Mongo must NOT have geotag_* keys."""
+        import pymongo
+        from pathlib import Path
+        env = {}
+        for line in Path("/app/backend/.env").read_text().splitlines():
+            if "=" in line and not line.strip().startswith("#"):
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip().strip('"')
+        client = pymongo.MongoClient(env["MONGO_URL"])
+        col = client[env["DB_NAME"]]["orders"]
+
+        png = _tiny_png()
+        files = {"photo": ("plain.png", io.BytesIO(png), "image/png")}
+        data = {"actor": "kurir-budi", "kind": "delivery"}
+        r = requests.post(f"{API}/orders/{sample_order_id}/pod", data=data, files=files)
+        assert r.status_code == 200, r.text
+
+        doc = col.find_one({"order_id": sample_order_id}, {"order_events": 1, "_id": 0})
+        last_ev = doc["order_events"][-1]
+        assert last_ev.get("kind") == "pod:delivery"
+        # Since OrderEvent has geotag_lat/lng as Optional[float] (default None),
+        # the keys exist but must be None when not supplied.
+        assert last_ev.get("geotag_lat") is None
+        assert last_ev.get("geotag_lng") is None
+

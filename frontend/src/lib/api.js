@@ -57,11 +57,13 @@ export async function patchOrderStatus(orderId, newStatus, actor) {
   );
 }
 
-export async function uploadPod(orderId, { actor, kind = "delivery", photo }) {
+export async function uploadPod(orderId, { actor, kind = "delivery", photo, lat, lng }) {
   const fd = new FormData();
   fd.append("actor", actor);
   fd.append("kind", kind);
-  fd.append("photo", photo, photo.name || "pod.png");
+  fd.append("photo", photo, photo.name || "pod.jpg");
+  if (typeof lat === "number") fd.append("lat", String(lat));
+  if (typeof lng === "number") fd.append("lng", String(lng));
   return unwrap(
     await fetch(`${API}/orders/${encodeURIComponent(orderId)}/pod`, {
       method: "POST",
@@ -103,25 +105,3 @@ export async function deductQuota(customerId, kg, reason) {
   );
 }
 
-/**
- * Generate a simple canvas-based mock photo blob — used by Courier PoD upload
- * when the real camera isn't available in the kiosk prototype.
- */
-export async function generateMockPodBlob(label = "PoD") {
-  const c = document.createElement("canvas");
-  c.width = 320;
-  c.height = 240;
-  const ctx = c.getContext("2d");
-  const grad = ctx.createLinearGradient(0, 0, 320, 240);
-  grad.addColorStop(0, "#1a1a1a");
-  grad.addColorStop(1, "#0a0a0a");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 320, 240);
-  ctx.fillStyle = "#FFD700";
-  ctx.font = "bold 24px sans-serif";
-  ctx.fillText(label, 20, 50);
-  ctx.fillStyle = "rgba(255,255,255,0.6)";
-  ctx.font = "14px sans-serif";
-  ctx.fillText(new Date().toISOString().slice(0, 19), 20, 220);
-  return await new Promise((res) => c.toBlob((b) => res(b), "image/png"));
-}

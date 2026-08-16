@@ -1,0 +1,44 @@
+{
+  "summary": "Verified new CameraCapture + geolocation live-camera migration end-to-end. Full pytest suite GREEN: 95 passed + 1 R2 skip (added 2 new tests to test_step6_pod.py covering kind='evidence' + lat/lng persistence, and geotag backward-compat). Playwright E2E confirmed the reusable component works across AttendanceKiosk (selfie + GPS -> real /api/attendance/clock-in upload, verified in Mongo with selfie_url='attendance/<uuid>_<hash>.jpg' + geotag_lat=-6.9, geotag_lng=107.6), POSScreen (evidence-thumb-0 renders a real <img blob:...>, mirror correctly disabled for rear camera, and paymentProof captured), and CourierDashboard (pod-modal opens with 4 on-motor orders, pod-capture-delivery opens the shared CameraCapture with camera-geo-pill visible because requireGeotag=true, live video 1280x960). All required data-testids are present. No mock helpers (generateMockSelfieBlob / generateMockPodBlob) remain in the repo; uploadPod is defined once and now supports lat/lng.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/orders/{order_id}", "issue": "OrderEvent Pydantic model has extra='ignore', so `kind`, `pod_url`, `geotag_lat`, `geotag_lng` fields are silently stripped from the JSON response even though they exist in Mongo. Frontend cannot read geotag or event tag from the API — only from Mongo. This limits admin UI features like 'delivered at [pin on map]'. Consider extending OrderEvent with optional kind/pod_url/geotag_lat/geotag_lng fields (or ConfigDict(extra='allow'))."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Courier PoD delivery via UI", "issue": "In one Playwright run the shutter click did not produce a preview state on the courier pod-capture-delivery modal (subsequent confirm/preview img absent). Could not consistently reproduce. Non-blocking: same CameraCapture instance works fine in AttendanceKiosk and POSScreen. Likely a race with getUserMedia re-init after the pod-modal open; consider adding a short readyState wait before enabling shutter or a manual retry.", "affected_selectors": ["[data-testid=camera-shutter]", "[data-testid=camera-preview-img]"]}
+    ],
+    "design_issues": [
+      {"screen": "POS payment-proof-thumbnail", "issues": ["Design shows a green pill 'Bukti bayar tersimpan' with a Receipt icon — no thumbnail of the actual captured photo. Since we now have a real blob, consider surfacing a small <img> preview so kasir can verify the photo is legible before saving the order."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_step6_pod.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL BACKEND: allow OrderEvent to surface `kind`, `pod_url`, `geotag_lat`, `geotag_lng` in API responses (currently stored in Mongo but stripped by Pydantic extra='ignore') — required if admin UI ever needs to render a geotagged delivery map / event tags.",
+    "OPTIONAL FRONTEND: show a small <img> preview inside payment-proof-thumbnail using the captured dataUrl so kasir can visually verify the payment proof.",
+    "OPTIONAL FRONTEND: guard courier pod-capture-delivery shutter to only enable after video.readyState >= 2 to prevent the intermittent no-preview issue observed once in Playwright."
+  ],
+  "critical_code_review_comments": [
+    "CameraCapture.jsx is a clean, self-contained ~440-line component; all lifecycle (start/stop stream, revoke object URLs, geolocation retry in confirm) is correctly handled. Timestamp watermark is baked into the JPEG which is a nice tamper-resistance touch.",
+    "getGeolocation() returns Indonesian error messages keyed off err.code — good UX. maximumAge=60000 could stale-cache the fix; consider maximumAge=0 for delivery/PoD to guarantee a fresh reading, at the cost of ~1s more latency.",
+    "orders.py: kind='evidence' + lat/lng correctly persist to event_doc; but Order response strips them (see backend minor). Adding these fields to OrderEvent is a low-risk 4-line change.",
+    "POSScreen.jsx handleSave uploads each evidence photo sequentially via uploadPod after order create — consider Promise.all for parallel uploads to shave latency when 3+ evidence photos are captured.",
+    "CourierDashboard.jsx confirmDelivery uses podDeliveryCoordsRef separately from the delivery blob ref — clean, but if the modal is reopened after a failed upload the previous blob ref could linger; verify cleanup on pod-modal close."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_step6_pod.py (+2 tests: test_pod_upload_evidence_kind_with_geotag, test_pod_upload_no_geotag_backward_compat)"
+  ],
+  "success_rate": {"backend": "100% (95 passed / 1 R2-skip)", "frontend": "~90% (attendance + POS evidence + POS payment + camera UI states all verified; courier full delivery upload UI-cycle was flaky in one run)"},
+  "test_credentials": "Staff PIN 1234 for all seeded staff (Erfa/Budi used).",
+  "seed_data_creation": "Used POST /api/seed/all in test fixture. Live smoke created 1 attendance row for Erfa with real GPS (-6.9, 107.6) and 1 evidence + 1 payment blob captured in POS UI (not saved to order — SIMPAN not triggered).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The full-page CameraCapture modal opens correctly via getUserMedia inside Playwright when context.grant_permissions(['camera','geolocation']) + context.set_geolocation({lat,lng}) are called BEFORE navigation. All 5 core testids (camera-capture-modal, camera-video, camera-geo-pill, camera-shutter, camera-preview-img, camera-confirm) are stable. Direct POS 'SIMPAN & CETAK QR' full save+upload flow wasn't exercised (requires filling name/kg/price), but the underlying uploadPod(kind='evidence', lat, lng) contract is covered by the new pytest. Courier UI full-cycle upload is worth one more targeted E2E run — consider adding `await page.wait_for_function('() => document.querySelector(\"[data-testid=camera-video]\")?.readyState >= 2')` before shutter click.",
+  "rca of the issue": "N/A — no critical failures. Only minor: OrderEvent Pydantic model strips extra fields (kind, pod_url, geotag_lat/lng) from API responses. Root cause = ConfigDict(extra='ignore'). Mitigation: add these fields as Optional on OrderEvent, or change to extra='allow'. Impact today: none for the P1 use case (write path persists everything correctly), only limits future read-back features."
+}

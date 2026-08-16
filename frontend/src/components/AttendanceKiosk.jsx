@@ -4,8 +4,6 @@ import {
   UserRound,
   LogIn,
   LogOut,
-  Camera,
-  MapPin,
   Clock,
   X,
   CheckCircle2,
@@ -21,6 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import HeaderNav from "@/components/HeaderNav";
+import CameraCapture from "@/components/CameraCapture";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -62,33 +61,6 @@ function buildShiftMessage(staffName, attendance) {
     `Pickup laundry ${sr.pickup_kg || 0} kg (${sr.pickup_pelanggan || 0} pelanggan), ` +
     `delivery laundry ${sr.delivery_kg || 0} kg (${sr.delivery_pelanggan || 0} pelanggan). ` +
     `Jam masuk: ${jamMasuk}, Jam pulang: ${jamPulang}.`
-  );
-}
-
-async function generateMockSelfieBlob() {
-  // Render a simple 240x240 canvas as the "selfie" — good enough for a
-  // prototype + proves the multipart upload pipeline works end-to-end.
-  const canvas = document.createElement("canvas");
-  canvas.width = 240;
-  canvas.height = 240;
-  const ctx = canvas.getContext("2d");
-  const grad = ctx.createLinearGradient(0, 0, 240, 240);
-  grad.addColorStop(0, "#222");
-  grad.addColorStop(1, "#0a0a0a");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 240, 240);
-  ctx.fillStyle = "#FFD700";
-  ctx.beginPath();
-  ctx.arc(120, 95, 42, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(120, 220, 80, Math.PI, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.6)";
-  ctx.font = "bold 14px sans-serif";
-  ctx.fillText(new Date().toISOString().slice(0, 19), 10, 228);
-  return await new Promise((res) =>
-    canvas.toBlob((b) => res(b), "image/png")
   );
 }
 
@@ -521,25 +493,22 @@ export default function AttendanceKiosk() {
 /* ---------------- CLOCK-IN MODAL ---------------- */
 function ClockInModal({ staffId, staffName, pinCode, onClose, onSuccess }) {
   const [uploading, setUploading] = useState(false);
-  const [captured, setCaptured] = useState(false);
-  const [now, setNow] = useState(new Date());
+  const [cameraOpen, setCameraOpen] = useState(true);
 
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  const capture = async () => {
-    if (uploading || captured) return;
+  const handleCapture = async ({ blob, coords }) => {
+    if (uploading) return;
+    if (!coords) {
+      toast.error("Lokasi belum siap. Coba ambil ulang foto.");
+      return;
+    }
     setUploading(true);
     try {
-      const blob = await generateMockSelfieBlob();
       const fd = new FormData();
       fd.append("staff_id", staffId || "");
       fd.append("pin_code", pinCode || "");
-      fd.append("lat", "-6.929");
-      fd.append("lng", "107.774");
-      fd.append("selfie", blob, "selfie.png");
+      fd.append("lat", String(coords.lat));
+      fd.append("lng", String(coords.lng));
+      fd.append("selfie", blob, `selfie_${staffId}.jpg`);
       const res = await fetch(`${API}/attendance/clock-in`, {
         method: "POST",
         body: fd,
@@ -553,8 +522,8 @@ function ClockInModal({ staffId, staffName, pinCode, onClose, onSuccess }) {
         throw new Error(detail);
       }
       const attendance = await res.json();
-      setCaptured(true);
-      setTimeout(() => onSuccess(attendance), 700);
+      setCameraOpen(false);
+      onSuccess(attendance);
     } catch (e) {
       toast.error(e.message || "Gagal absen masuk");
     } finally {
@@ -563,130 +532,19 @@ function ClockInModal({ staffId, staffName, pinCode, onClose, onSuccess }) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4"
-      data-testid="clockin-modal"
-    >
-      <div className="w-full md:max-w-lg glass-strong border border-white/10 rounded-t-3xl md:rounded-3xl overflow-hidden animate-fade-up">
-        {/* Header */}
-        <div className="p-5 flex items-center justify-between border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-400 flex items-center justify-center shadow-[0_0_18px_rgba(52,211,153,0.5)]">
-              <LogIn size={18} className="text-black" strokeWidth={2.5} />
-            </div>
-            <div>
-              <div className="font-heading font-extrabold text-white text-base tracking-tight">
-                Absen Masuk
-              </div>
-              <div className="text-white/50 text-[11px] uppercase tracking-widest">
-                {staffName}
-              </div>
-            </div>
-          </div>
-          <button
-            data-testid="clockin-close"
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/60"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Camera viewfinder */}
-        <div className="p-5 space-y-4">
-          <div
-            className="relative aspect-[3/4] md:aspect-[4/3] w-full rounded-2xl overflow-hidden bg-gradient-to-b from-[#111] to-[#222] border border-white/10"
-            data-testid="camera-viewfinder"
-          >
-            {/* mock camera backdrop */}
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,215,0,0.08),transparent_60%)]" />
-
-            {/* silhouette placeholder */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-40 h-40 rounded-full border-4 border-dashed border-white/15 flex items-center justify-center">
-                <UserRound size={72} className="text-white/20" strokeWidth={1.5} />
-              </div>
-            </div>
-
-            {/* corner frames */}
-            <div className="absolute top-3 left-3 w-6 h-6 border-t-2 border-l-2 border-[#FFD700] animate-corner-blink" />
-            <div className="absolute top-3 right-3 w-6 h-6 border-t-2 border-r-2 border-[#FFD700] animate-corner-blink" />
-            <div className="absolute bottom-3 left-3 w-6 h-6 border-b-2 border-l-2 border-[#FFD700] animate-corner-blink" />
-            <div className="absolute bottom-3 right-3 w-6 h-6 border-b-2 border-r-2 border-[#FFD700] animate-corner-blink" />
-
-            {/* scanning line when uploading */}
-            {uploading && (
-              <div className="absolute inset-x-0 h-[2px] bg-[#FFD700] shadow-[0_0_18px_rgba(255,215,0,0.8)] animate-scan-line" />
-            )}
-
-            {/* success overlay */}
-            {captured && (
-              <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center backdrop-blur-sm">
-                <div className="flex flex-col items-center gap-2 text-emerald-300 font-heading font-black">
-                  <CheckCircle2 size={56} strokeWidth={2.25} />
-                  <div className="text-xl">TERVERIFIKASI</div>
-                </div>
-              </div>
-            )}
-
-            {/* top strip = live status */}
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/70 border border-white/10 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-[10px] uppercase tracking-widest text-white/70 font-semibold">
-                Live Camera
-              </span>
-            </div>
-
-            {/* bottom info strip */}
-            <div className="absolute bottom-3 left-3 right-3 rounded-xl bg-black/70 backdrop-blur-md border border-white/10 p-2.5 space-y-1">
-              <div className="flex items-center gap-2 text-[11px]">
-                <MapPin size={13} className="text-[#FFD700]" />
-                <span className="text-white/80 font-semibold">
-                  Lokasi: -6.929, 107.774
-                </span>
-                <span className="ml-auto text-emerald-300 text-[10px] uppercase font-bold">
-                  ±5m akurat
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-[11px]">
-                <Clock size={13} className="text-[#FFD700]" />
-                <span className="text-white/80 font-semibold tabular-nums">
-                  {formatClock(now)}
-                </span>
-                <span className="ml-auto text-white/40 text-[10px]">
-                  Outlet Bandung Utara
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <button
-            data-testid="capture-photo-btn"
-            onClick={capture}
-            disabled={uploading || captured}
-            className={`w-full h-14 rounded-2xl font-heading font-black text-base tracking-tight transition-all active:scale-[0.98] ${
-              uploading || captured
-                ? "bg-white/10 text-white/40 cursor-not-allowed"
-                : "bg-[#FFD700] text-black hover:shadow-[0_0_30px_rgba(255,215,0,0.5)]"
-            } flex items-center justify-center gap-2`}
-          >
-            {uploading ? (
-              <>
-                <Loader2 size={20} className="animate-spin" /> MENGUNGGAH FOTO...
-              </>
-            ) : captured ? (
-              <>
-                <CheckCircle2 size={20} /> TERCATAT
-              </>
-            ) : (
-              <>
-                <Camera size={20} strokeWidth={2.5} /> AMBIL FOTO & CATAT WAKTU
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
+    <CameraCapture
+      open={cameraOpen}
+      onClose={() => {
+        setCameraOpen(false);
+        onClose();
+      }}
+      onCapture={handleCapture}
+      facing="user"
+      requireGeotag
+      title={`Absen Masuk · ${staffName}`}
+      helper="Posisikan wajah di tengah lalu tekan tombol putih"
+      ctaLabel="Kirim Absensi"
+    />
   );
 }
 
@@ -729,7 +587,6 @@ function ClockOutModal({ staffId, staffName, pinCode, onClose, onConfirm }) {
       }
     };
     run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const sendReport = () => {

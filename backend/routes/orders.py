@@ -40,9 +40,18 @@ MAX_POD_BYTES = 5 * 1024 * 1024  # 5 MB
 async def _hydrate_pod_urls(order: Order) -> Order:
     """Replace stored object keys in ``pod_urls`` with usable frontend URLs
     (presigned R2 GET URLs in prod, /api/uploads/... locally). Idempotent —
-    legacy full paths pass through untouched."""
+    legacy full paths pass through untouched.
+
+    Also hydrates ``pod_url`` inside each ``order_events[i]`` for the photo
+    events (kind starts with 'pod:'), so the admin timeline can render
+    signed URLs without re-querying storage.
+    """
     if order.pod_urls:
         order.pod_urls = [await resolve_url(u) for u in order.pod_urls]
+    if order.order_events:
+        for ev in order.order_events:
+            if ev.pod_url:
+                ev.pod_url = await resolve_url(ev.pod_url)
     return order
 
 
@@ -138,15 +147,26 @@ async def update_status(order_id: str, payload: StatusUpdate) -> Order:
 async def upload_pod(
     order_id: str,
     actor: str = Form(..., min_length=1),
-    kind: str = Form("delivery", description="Tag for the photo: 'delivery' or 'payment'"),
+    kind: str = Form(
+        "delivery",
+        description="Photo tag: 'delivery' | 'payment' | 'evidence' | 'pickup'",
+    ),
+    lat: Optional[float] = Form(None, description="Optional geotag latitude"),
+    lng: Optional[float] = Form(None, description="Optional geotag longitude"),
     photo: UploadFile = File(...),
 ) -> Order:
-    """Upload a Proof-of-Delivery (or Proof-of-Payment) photo for an order.
+    """Upload a proof photo for an order.
 
-    Saves the image under /app/backend/uploads/pod/, appends the public URL to
-    the order's `pod_urls` array, and records an audit event. Does NOT auto-
-    transition status — the courier screen issues a separate PATCH /status
-    call so the two concerns stay independent.
+    ``kind`` is a free-form audit tag ('evidence' for input-time photos taken
+    at the POS, 'delivery' + 'payment' for courier PoD, 'pickup' for future
+    use). We do not enforce an enum on kind so new photo phases can be added
+    without a schema change.
+
+    If ``lat`` + ``lng`` are supplied they are stamped on the audit event so
+    we can prove *where* the photo was taken (mandatory for courier PoD to
+    prevent selfies from a kasir's phone at the outlet).
+
+    Does NOT auto-transition status — that stays a separate PATCH /status.
     """
     row = await orders_col.find_one({"order_id": order_id}, {"_id": 0})
     if not row:
@@ -182,6 +202,10 @@ async def upload_pod(
     # Tag the event so it's distinguishable from status transitions
     event_doc["kind"] = f"pod:{kind}"
     event_doc["pod_url"] = pod_url
+    if lat is not None:
+        event_doc["geotag_lat"] = lat
+    if lng is not None:
+        event_doc["geotag_lng"] = lng
 
     await orders_col.update_one(
         {"order_id": order_id},

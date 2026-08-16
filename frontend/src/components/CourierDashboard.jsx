@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import HeaderNav from "@/components/HeaderNav";
+import CameraCapture from "@/components/CameraCapture";
 import {
   getPendingOrders,
   removePendingOrder,
@@ -35,7 +36,6 @@ import {
   fetchOrders,
   patchOrderStatus,
   uploadPod,
-  generateMockPodBlob,
 } from "@/lib/api";
 import { getActorTag, getCurrentStaff } from "@/lib/staffSession";
 
@@ -139,16 +139,19 @@ export default function CourierDashboard() {
   const [podOrder, setPodOrder] = useState(null);
   const [podCaptured, setPodCaptured] = useState(false);
   const [podPaymentCaptured, setPodPaymentCaptured] = useState(false);
-  const [podCapturing, setPodCapturing] = useState(null); // "delivery" | "payment" | null
   const [podSubmitting, setPodSubmitting] = useState(false);
+  // Which live-camera panel is currently open (null when the outer PoD dialog
+  // is showing the two "step" buttons).
+  const [activeCameraKind, setActiveCameraKind] = useState(null);
   const podDeliveryBlobRef = useRef(null);
   const podPaymentBlobRef = useRef(null);
-  const podTimerRef = useRef(null);
+  const podDeliveryCoordsRef = useRef(null);
+  const [podDeliveryPreview, setPodDeliveryPreview] = useState(null);
+  const [podPaymentPreview, setPodPaymentPreview] = useState(null);
 
   useEffect(() => {
     return () => {
       if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
-      if (podTimerRef.current) clearTimeout(podTimerRef.current);
     };
   }, []);
 
@@ -270,21 +273,31 @@ export default function CourierDashboard() {
     setPodOrder(order);
     setPodCaptured(false);
     setPodPaymentCaptured(false);
-    setPodCapturing(null);
+    setActiveCameraKind(null);
+    setPodDeliveryPreview(null);
+    setPodPaymentPreview(null);
+    podDeliveryBlobRef.current = null;
+    podPaymentBlobRef.current = null;
+    podDeliveryCoordsRef.current = null;
     setPodOpen(true);
   };
 
   const capturePhoto = (kind) => {
-    if (podCapturing) return;
-    setPodCapturing(kind);
-    podTimerRef.current = setTimeout(() => {
-      if (kind === "delivery") {
-        setPodCaptured(true);
-      } else {
-        setPodPaymentCaptured(true);
-      }
-      setPodCapturing(null);
-    }, 900);
+    setActiveCameraKind(kind);
+  };
+
+  const handleCameraCapture = async ({ blob, dataUrl, coords }) => {
+    if (activeCameraKind === "delivery") {
+      podDeliveryBlobRef.current = blob;
+      podDeliveryCoordsRef.current = coords || null;
+      setPodDeliveryPreview(dataUrl);
+      setPodCaptured(true);
+    } else if (activeCameraKind === "payment") {
+      podPaymentBlobRef.current = blob;
+      setPodPaymentPreview(dataUrl);
+      setPodPaymentCaptured(true);
+    }
+    setActiveCameraKind(null);
   };
 
   const podPaymentRequired = podOrder?.paymentStatus === "nanti";
@@ -296,17 +309,24 @@ export default function CourierDashboard() {
     try {
       const actor = getActorTag();
       const deliveryBlob = podDeliveryBlobRef.current;
+      const coords = podDeliveryCoordsRef.current;
       if (deliveryBlob) {
-        const file = new File([deliveryBlob], `pod_${podOrder.id}.png`, {
-          type: "image/png",
+        const file = new File([deliveryBlob], `pod_${podOrder.id}.jpg`, {
+          type: "image/jpeg",
         });
-        await uploadPod(podOrder.id, { actor, kind: "delivery", photo: file });
+        await uploadPod(podOrder.id, {
+          actor,
+          kind: "delivery",
+          photo: file,
+          lat: coords?.lat,
+          lng: coords?.lng,
+        });
       }
       if (podPaymentRequired && podPaymentBlobRef.current) {
         const payFile = new File(
           [podPaymentBlobRef.current],
-          `pay_${podOrder.id}.png`,
-          { type: "image/png" }
+          `pay_${podOrder.id}.jpg`,
+          { type: "image/jpeg" }
         );
         await uploadPod(podOrder.id, { actor, kind: "payment", photo: payFile });
       }
@@ -321,9 +341,12 @@ export default function CourierDashboard() {
       setPodOrder(null);
       setPodCaptured(false);
       setPodPaymentCaptured(false);
-      setPodCapturing(null);
+      setActiveCameraKind(null);
+      setPodDeliveryPreview(null);
+      setPodPaymentPreview(null);
       podDeliveryBlobRef.current = null;
       podPaymentBlobRef.current = null;
+      podDeliveryCoordsRef.current = null;
     } catch (e) {
       toast.error(`Gagal konfirmasi pengiriman: ${e.message}`);
     } finally {
@@ -333,14 +356,12 @@ export default function CourierDashboard() {
 
   const handleClosePod = (open) => {
     if (!open) {
-      if (podTimerRef.current) {
-        clearTimeout(podTimerRef.current);
-        podTimerRef.current = null;
-      }
       setPodOrder(null);
       setPodCaptured(false);
       setPodPaymentCaptured(false);
-      setPodCapturing(null);
+      setActiveCameraKind(null);
+      setPodDeliveryPreview(null);
+      setPodPaymentPreview(null);
     }
     setPodOpen(open);
   };
@@ -876,23 +897,20 @@ export default function CourierDashboard() {
             </div>
             <button
               onClick={() => capturePhoto("delivery")}
-              disabled={podCaptured || podCapturing !== null}
+              disabled={podCaptured}
               data-testid="pod-capture-delivery"
-              className={`w-full aspect-[2/1] rounded-2xl border-2 border-dashed flex items-center justify-center gap-3 transition-all active:scale-[0.98] ${
+              className={`w-full aspect-[2/1] rounded-2xl border-2 border-dashed flex items-center justify-center gap-3 overflow-hidden transition-all active:scale-[0.98] ${
                 podCaptured
                   ? "border-[#FFD700]/40 bg-[#FFD700]/10 text-[#FFD700] cursor-default"
-                  : podCapturing === "delivery"
-                  ? "border-[#FFD700] bg-[#FFD700]/15 text-[#FFD700] cursor-wait"
                   : "border-[#FFD700]/50 bg-[#FFD700]/5 hover:bg-[#FFD700]/15 text-[#FFD700]"
               }`}
             >
-              {podCapturing === "delivery" ? (
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full border-4 border-[#FFD700]/40 border-t-[#FFD700] animate-spin" />
-                  <span className="font-heading font-bold text-sm">
-                    Mengambil foto...
-                  </span>
-                </div>
+              {podCaptured && podDeliveryPreview ? (
+                <img
+                  src={podDeliveryPreview}
+                  alt="Bukti pengiriman"
+                  className="w-full h-full object-cover"
+                />
               ) : podCaptured ? (
                 <div className="flex items-center gap-2.5">
                   <CheckCircle2 size={28} strokeWidth={2} />
@@ -944,29 +962,22 @@ export default function CourierDashboard() {
               </div>
               <button
                 onClick={() => capturePhoto("payment")}
-                disabled={
-                  !podCaptured ||
-                  podPaymentCaptured ||
-                  podCapturing !== null
-                }
+                disabled={!podCaptured || podPaymentCaptured}
                 data-testid="pod-capture-payment"
-                className={`w-full aspect-[2/1] rounded-2xl border-2 border-dashed flex items-center justify-center gap-3 transition-all active:scale-[0.98] ${
+                className={`w-full aspect-[2/1] rounded-2xl border-2 border-dashed flex items-center justify-center gap-3 overflow-hidden transition-all active:scale-[0.98] ${
                   podPaymentCaptured
                     ? "border-[#7DF08F]/40 bg-[#7DF08F]/10 text-[#7DF08F] cursor-default"
-                    : podCapturing === "payment"
-                    ? "border-[#7DF08F] bg-[#7DF08F]/15 text-[#7DF08F] cursor-wait"
                     : !podCaptured
                     ? "border-white/10 bg-white/[0.02] text-white/30 cursor-not-allowed"
                     : "border-[#7DF08F]/50 bg-[#7DF08F]/5 hover:bg-[#7DF08F]/15 text-[#7DF08F]"
                 }`}
               >
-                {podCapturing === "payment" ? (
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full border-4 border-[#7DF08F]/40 border-t-[#7DF08F] animate-spin" />
-                    <span className="font-heading font-bold text-sm">
-                      Memverifikasi bayar...
-                    </span>
-                  </div>
+                {podPaymentCaptured && podPaymentPreview ? (
+                  <img
+                    src={podPaymentPreview}
+                    alt="Bukti bayar"
+                    className="w-full h-full object-cover"
+                  />
                 ) : podPaymentCaptured ? (
                   <div className="flex items-center gap-2.5">
                     <Receipt size={28} strokeWidth={2} />
@@ -1012,6 +1023,27 @@ export default function CourierDashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Live camera modal — reused for both delivery + payment photos.
+          Delivery requires geotag; payment is a plain photo. */}
+      <CameraCapture
+        open={activeCameraKind !== null}
+        onClose={() => setActiveCameraKind(null)}
+        onCapture={handleCameraCapture}
+        facing="environment"
+        requireGeotag={activeCameraKind === "delivery"}
+        title={
+          activeCameraKind === "delivery"
+            ? "Foto Bukti Serah Terima"
+            : "Foto Bukti Bayar"
+        }
+        helper={
+          activeCameraKind === "delivery"
+            ? "Foto customer + paket · GPS akan terekam"
+            : "Foto uang / struk transfer sebagai bukti"
+        }
+        ctaLabel={activeCameraKind === "delivery" ? "Simpan PoD" : "Simpan Bukti"}
+      />
     </div>
   );
 }

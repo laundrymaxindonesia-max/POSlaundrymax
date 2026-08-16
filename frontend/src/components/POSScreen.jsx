@@ -33,6 +33,7 @@ import {
   fetchPrices,
   searchCustomers,
   createCustomer,
+  uploadPod,
 } from "@/lib/api";
 import { getActorTag, getCurrentStaff } from "@/lib/staffSession";
 import {
@@ -55,6 +56,7 @@ import CustomerSelection from "@/components/pos/CustomerSelection";
 import OrderSource from "@/components/pos/OrderSource";
 import ServiceTabs from "@/components/pos/ServiceTabs";
 import CartSummary from "@/components/pos/CartSummary";
+import CameraCapture from "@/components/CameraCapture";
 
 
 export default function POSScreen() {
@@ -80,16 +82,14 @@ export default function POSScreen() {
   const [sepatuCounts, setSepatuCounts] = useState({});
   const [showcaseCounts, setShowcaseCounts] = useState({});
 
-  // Evidence photos (multi)
+  // Evidence photos (multi) — each item: { id, blob, dataUrl }
   const [evidencePhotos, setEvidencePhotos] = useState([]);
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
-  const [photoUploading, setPhotoUploading] = useState(false);
 
   // Payment
   const [paymentStatus, setPaymentStatus] = useState("lunas");
-  const [paymentProof, setPaymentProof] = useState(null);
+  const [paymentProof, setPaymentProof] = useState(null); // { blob, dataUrl, method?, amount? }
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [paymentUploading, setPaymentUploading] = useState(false);
 
   // QR / save
   const [qrOpen, setQrOpen] = useState(false);
@@ -348,50 +348,45 @@ export default function POSScreen() {
     Object.values(sepatuCounts).filter((v) => v > 0).length +
     Object.values(showcaseCounts).filter((v) => v > 0).length;
 
-  // Photo evidence (multi)
+  // Photo evidence (multi) — live camera capture
   const handleTakePhoto = () => {
     setPhotoModalOpen(true);
-    setPhotoUploading(true);
-    setTimeout(() => {
-      const newPhoto = {
-        id: `evidence_${Date.now()}`,
-        thumbnail: `hsl(${Math.random() * 60 + 30}, 80%, 55%)`,
-      };
-      setEvidencePhotos((prev) => [...prev, newPhoto]);
-      setPhotoUploading(false);
-      toast.success(`Foto ${evidencePhotos.length + 1} tersimpan`);
-    }, 900);
   };
 
-  const handleClosePhotoModal = (open) => {
-    if (!open) {
-      setPhotoUploading(false);
-    }
-    setPhotoModalOpen(open);
+  const handleEvidenceCaptured = async ({ blob, dataUrl }) => {
+    const newPhoto = {
+      id: `evidence_${Date.now()}`,
+      blob,
+      dataUrl,
+    };
+    setEvidencePhotos((prev) => [...prev, newPhoto]);
+    setPhotoModalOpen(false);
+    toast.success(`Foto ${evidencePhotos.length + 1} tersimpan`);
   };
 
   const removeEvidencePhoto = (id) => {
-    setEvidencePhotos((prev) => prev.filter((p) => p.id !== id));
+    setEvidencePhotos((prev) => {
+      const gone = prev.find((p) => p.id === id);
+      if (gone?.dataUrl) URL.revokeObjectURL(gone.dataUrl);
+      return prev.filter((p) => p.id !== id);
+    });
   };
 
-  // Payment proof
+  // Payment proof (live camera)
   const handlePaymentPhoto = () => {
     setPaymentModalOpen(true);
-    setPaymentUploading(true);
-    setTimeout(() => {
-      setPaymentProof({
-        id: `payment_${Date.now()}`,
-        method: "Cash",
-        amount: total,
-      });
-      setPaymentUploading(false);
-      toast.success("Bukti bayar tersimpan");
-    }, 900);
   };
 
-  const handleClosePaymentModal = (open) => {
-    if (!open) setPaymentUploading(false);
-    setPaymentModalOpen(open);
+  const handlePaymentCaptured = async ({ blob, dataUrl }) => {
+    setPaymentProof({
+      id: `payment_${Date.now()}`,
+      blob,
+      dataUrl,
+      method: "Cash",
+      amount: total,
+    });
+    setPaymentModalOpen(false);
+    toast.success("Bukti bayar tersimpan");
   };
 
   // Save validation
@@ -509,12 +504,38 @@ export default function POSScreen() {
       order_status: "Antrian",
       actor: getActorTag() || `kasir-${(currentStaff?.name || "unknown").toLowerCase()}`,
     };
-    createOrder(payload).catch((err) => {
-      console.error("Gagal menyimpan order ke backend:", err.message);
-      toast.error("Simpan ke server gagal", {
-        description: `Order tersimpan lokal. Detail: ${err.message}`,
+    createOrder(payload)
+      .then(async () => {
+        // Upload evidence photos + payment proof to R2 via /orders/{id}/pod.
+        // We fire-and-await AFTER order creation so backend has the row.
+        try {
+          const actor = payload.actor;
+          for (const p of evidencePhotos) {
+            if (!p.blob) continue;
+            const file = new File([p.blob], `evidence_${id}.jpg`, {
+              type: p.blob.type || "image/jpeg",
+            });
+            await uploadPod(id, { actor, kind: "evidence", photo: file });
+          }
+          if (paymentProof?.blob) {
+            const file = new File([paymentProof.blob], `payment_${id}.jpg`, {
+              type: paymentProof.blob.type || "image/jpeg",
+            });
+            await uploadPod(id, { actor, kind: "payment", photo: file });
+          }
+        } catch (upErr) {
+          console.error("Photo upload gagal:", upErr);
+          toast.warning("Order tersimpan, tapi upload foto gagal", {
+            description: upErr.message,
+          });
+        }
+      })
+      .catch((err) => {
+        console.error("Gagal menyimpan order ke backend:", err.message);
+        toast.error("Simpan ke server gagal", {
+          description: `Order tersimpan lokal. Detail: ${err.message}`,
+        });
       });
-    });
 
     setQrOpen(true);
   };
@@ -835,16 +856,21 @@ export default function POSScreen() {
               {evidencePhotos.map((p, idx) => (
                 <div
                   key={p.id}
-                  className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group"
+                  className="relative aspect-square rounded-xl overflow-hidden border border-white/10 group bg-black"
                   data-testid={`evidence-thumb-${idx}`}
-                  style={{
-                    background: `linear-gradient(135deg, ${p.thumbnail}, rgba(0,0,0,0.3))`,
-                  }}
                 >
-                  <div className="absolute inset-0 flex items-center justify-center text-white/70">
-                    <Camera size={18} />
-                  </div>
-                  <div className="absolute bottom-1 left-1 text-[9px] font-mono text-white/80 font-bold bg-black/40 px-1 rounded">
+                  {p.dataUrl ? (
+                    <img
+                      src={p.dataUrl}
+                      alt={`Bukti ${idx + 1}`}
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-white/70">
+                      <Camera size={18} />
+                    </div>
+                  )}
+                  <div className="absolute bottom-1 left-1 text-[9px] font-mono text-white/90 font-bold bg-black/60 px-1 rounded">
                     #{idx + 1}
                   </div>
                   <button
@@ -916,8 +942,16 @@ export default function POSScreen() {
                   className="p-3 rounded-xl bg-[#7DF08F]/10 border border-[#7DF08F]/30 flex items-center gap-3"
                   data-testid="payment-proof-thumbnail"
                 >
-                  <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-[#7DF08F]/30 to-[#FFD700]/20 border border-[#7DF08F]/40 flex items-center justify-center flex-shrink-0">
-                    <Receipt size={24} className="text-[#7DF08F]" />
+                  <div className="w-16 h-16 rounded-lg overflow-hidden border border-[#7DF08F]/40 flex items-center justify-center flex-shrink-0 bg-black">
+                    {paymentProof.dataUrl ? (
+                      <img
+                        src={paymentProof.dataUrl}
+                        alt="Bukti bayar"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Receipt size={24} className="text-[#7DF08F]" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-heading font-bold text-[#7DF08F] text-sm">
@@ -954,83 +988,27 @@ export default function POSScreen() {
         onSave={handleSave}
       />
 
-      {/* Evidence photo modal */}
-      <Dialog open={photoModalOpen} onOpenChange={handleClosePhotoModal}>
-        <DialogContent className="bg-[#111111] border-white/10 text-white max-w-sm rounded-3xl">
-          <DialogHeader>
-            <DialogTitle className="font-heading font-bold text-[#FFD700]">
-              Kamera Bukti Cucian
-            </DialogTitle>
-            <DialogDescription className="text-white/50 text-xs">
-              Foto sedang diunggah ke object storage sebagai bukti terima.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="aspect-square rounded-2xl bg-gradient-to-br from-white/5 to-white/0 border border-white/10 flex items-center justify-center overflow-hidden relative">
-            {photoUploading ? (
-              <div className="flex flex-col items-center gap-3 text-white/60">
-                <div className="w-16 h-16 rounded-full border-4 border-[#FFD700]/40 border-t-[#FFD700] animate-spin" />
-                <div className="text-xs uppercase tracking-widest">
-                  Mengunggah ke R2...
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-3 text-[#FFD700]">
-                <CheckCircle2 size={56} strokeWidth={2} />
-                <div className="font-heading font-bold">Tersimpan</div>
-                <div className="text-[11px] text-white/50 font-mono">
-                  {evidencePhotos.length} foto total
-                </div>
-              </div>
-            )}
-          </div>
-          <button
-            onClick={() => setPhotoModalOpen(false)}
-            className="w-full h-12 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors flex items-center justify-center gap-2"
-            data-testid="close-photo-modal"
-          >
-            <X size={16} /> Tutup
-          </button>
-        </DialogContent>
-      </Dialog>
+      {/* Evidence photo capture — live camera */}
+      <CameraCapture
+        open={photoModalOpen}
+        onClose={() => setPhotoModalOpen(false)}
+        onCapture={handleEvidenceCaptured}
+        facing="environment"
+        title="Foto Bukti Cucian"
+        helper="Ambil foto keadaan cucian saat terima"
+        ctaLabel="Simpan Foto"
+      />
 
-      {/* Payment proof modal */}
-      <Dialog open={paymentModalOpen} onOpenChange={handleClosePaymentModal}>
-        <DialogContent className="bg-[#111111] border-white/10 text-white max-w-sm rounded-3xl">
-          <DialogHeader>
-            <DialogTitle className="font-heading font-bold text-[#7DF08F]">
-              Foto Bukti Bayar
-            </DialogTitle>
-            <DialogDescription className="text-white/50 text-xs">
-              Ambil foto struk / uang diterima sebagai bukti pembayaran.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="aspect-square rounded-2xl bg-gradient-to-br from-[#7DF08F]/10 to-white/0 border border-white/10 flex items-center justify-center overflow-hidden relative">
-            {paymentUploading ? (
-              <div className="flex flex-col items-center gap-3 text-white/60">
-                <div className="w-16 h-16 rounded-full border-4 border-[#7DF08F]/40 border-t-[#7DF08F] animate-spin" />
-                <div className="text-xs uppercase tracking-widest">
-                  Memverifikasi pembayaran...
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-3 text-[#7DF08F]">
-                <Receipt size={56} strokeWidth={2} />
-                <div className="font-heading font-bold">Bukti tersimpan</div>
-                <div className="text-[11px] text-white/50 font-mono">
-                  {formatIDR(total)}
-                </div>
-              </div>
-            )}
-          </div>
-          <button
-            onClick={() => setPaymentModalOpen(false)}
-            className="w-full h-12 rounded-xl bg-white/5 border border-white/10 text-white font-medium hover:bg-white/10 transition-colors flex items-center justify-center gap-2"
-            data-testid="close-payment-modal"
-          >
-            <X size={16} /> Tutup
-          </button>
-        </DialogContent>
-      </Dialog>
+      {/* Payment proof capture — live camera */}
+      <CameraCapture
+        open={paymentModalOpen}
+        onClose={() => setPaymentModalOpen(false)}
+        onCapture={handlePaymentCaptured}
+        facing="environment"
+        title="Foto Bukti Bayar"
+        helper="Ambil foto struk / uang diterima"
+        ctaLabel="Simpan Bukti Bayar"
+      />
 
       {/* Tracking modal */}
       <TrackingModal order={trackOrder} onClose={() => setTrackOrder(null)} />

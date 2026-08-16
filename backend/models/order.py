@@ -21,7 +21,13 @@ STATUS_CHAIN: List[OrderStatus] = [
 
 
 class OrderEvent(BaseModel):
-    """Immutable audit record of a status transition on an Order."""
+    """Immutable audit record of a status transition on an Order.
+
+    Also used for photo-upload audit rows (kind='pod:delivery'|'pod:payment'|
+    'pod:evidence'|…), which additionally carry `pod_url` and optional
+    `geotag_lat/geotag_lng` so a future admin UI can render a per-order photo
+    timeline + a location pin.
+    """
 
     model_config = ConfigDict(extra="ignore")
 
@@ -30,6 +36,11 @@ class OrderEvent(BaseModel):
     timestamp: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
+    # Optional photo-event fields — populated only for pod:* events.
+    kind: Optional[str] = None
+    pod_url: Optional[str] = None
+    geotag_lat: Optional[float] = None
+    geotag_lng: Optional[float] = None
 
 
 class OrderBase(BaseModel):

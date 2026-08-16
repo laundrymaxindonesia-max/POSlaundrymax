@@ -22,6 +22,16 @@ Mobile-first three-role ops app + Admin Command Center for a laundry business "L
 - **Superadmin** — monitor KPI, atur multi-tier pricing, lihat laporan pegawai, monitor kuota B2B.
 
 ## What's Been Implemented
+### P1 — Reusable Live Camera + Geotagging — iter_25 100%
+Replaced all mock canvas / setTimeout selfies with a single reusable `CameraCapture` component using real `getUserMedia` + `navigator.geolocation`. Wired into 3 flows: attendance kiosk, POS evidence & payment proof, courier PoD.
+- **NEW** `frontend/src/lib/geolocation.js` — promise wrapper around navigator.geolocation with Indonesian error UX.
+- **NEW** `frontend/src/components/CameraCapture.jsx` — full-screen live viewfinder, flip camera, timestamp watermark baked into JPEG, GPS pill overlay, file-input fallback for restricted browsers.
+- **Updated** `AttendanceKiosk.jsx` — ClockInModal simplified to a single `<CameraCapture facing='user' requireGeotag />`. Real coords now shipped to `/api/attendance/clock-in`.
+- **Updated** `POSScreen.jsx` — evidence + payment proof captured via CameraCapture; both uploaded to `/api/orders/{id}/pod?kind=evidence|payment` after order create. Real image thumbnails render on the form.
+- **Updated** `CourierDashboard.jsx` — delivery PoD requires geotag, payment does not. Real blobs + coords sent via `uploadPod(kind, lat, lng)`.
+- **Backend** `routes/orders.py` `POST /pod` now accepts optional `lat/lng` Form fields; persisted to event. `OrderEvent` model extended with `kind`, `pod_url`, `geotag_lat`, `geotag_lng` so events surface these in API responses too. `_hydrate_pod_urls` also signs `pod_url` on each event.
+- **95 backend pytest GREEN** + 1 R2 skip. Frontend verified end-to-end via testing_agent iter_25.
+
 ### P0 — Cloudflare R2 Photo Storage — iter_24 100%
 Hybrid uploader: R2 in prod, local disk in dev/preview. **Zero-code deploy switch** — activates when 4 env vars set on Render.
 - `backend/storage.py` (NEW): `is_r2_enabled()`, `make_object_key()`, `save_image_bytes()`, `resolve_url()`, `delete_object()` — all async, all with local-disk fallback.
