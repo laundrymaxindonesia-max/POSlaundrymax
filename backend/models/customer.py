@@ -10,6 +10,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 CustomerType = Literal["Regular", "Member"]
 MemberTier = Literal["Silver", "Gold", "Platinum"]
+# CRM segmentation — where the customer originally came from. Used for
+# marketing filters, reporting and outreach eligibility.
+SourceCategory = Literal[
+    "Taman Melati",
+    "Walk-in Laskita",
+    "B2B Kosan",
+    "Antar Jemput",
+    "Lainnya",
+]
 
 
 class CustomerBase(BaseModel):
@@ -22,10 +31,29 @@ class CustomerBase(BaseModel):
     member_tier: Optional[MemberTier] = None
     remaining_quota_kg: Optional[float] = Field(default=None, ge=0)
     quota_expiry_date: Optional[datetime] = None
+    source_category: SourceCategory = "Lainnya"
+    notes: Optional[str] = None
 
 
 class CustomerCreate(CustomerBase):
     """Payload accepted by POST /api/customers."""
+
+
+class CustomerUpdate(BaseModel):
+    """Partial update — every field optional so the kasir can fix a single
+    typo without re-typing the full record."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    name: Optional[str] = Field(default=None, min_length=1)
+    phone: Optional[str] = Field(default=None, min_length=1)
+    address: Optional[str] = None
+    type: Optional[CustomerType] = None
+    member_tier: Optional[MemberTier] = None
+    remaining_quota_kg: Optional[float] = Field(default=None, ge=0)
+    quota_expiry_date: Optional[datetime] = None
+    source_category: Optional[SourceCategory] = None
+    notes: Optional[str] = None
 
 
 class QuotaDeduction(BaseModel):

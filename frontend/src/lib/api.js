@@ -160,6 +160,96 @@ export async function deductQuota(customerId, kg, reason) {
   );
 }
 
+// ---------- Customers ----------
+export async function updateCustomer(customerId, patch) {
+  return unwrap(
+    await fetch(`${API}/customers/${encodeURIComponent(customerId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    })
+  );
+}
+
+export async function exportCustomersCsv() {
+  const res = await fetch(`${API}/customers/export.csv`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.text();
+}
+
+export async function importCustomersCsv(csvText) {
+  return unwrap(
+    await fetch(`${API}/customers/import`, {
+      method: "POST",
+      headers: { "Content-Type": "text/csv" },
+      body: csvText,
+    })
+  );
+}
+
+// ---------- Prospects ----------
+export async function fetchProspects(params = {}) {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, v);
+  });
+  return unwrap(await fetch(`${API}/prospects?${qs.toString()}`));
+}
+
+export async function createProspect(payload) {
+  return unwrap(
+    await fetch(`${API}/prospects`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+  );
+}
+
+export async function updateProspect(prospectId, patch) {
+  return unwrap(
+    await fetch(`${API}/prospects/${encodeURIComponent(prospectId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    })
+  );
+}
+
+export async function convertProspect(prospectId, customerPayload) {
+  return unwrap(
+    await fetch(`${API}/prospects/${encodeURIComponent(prospectId)}/convert`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(customerPayload),
+    })
+  );
+}
+
+export async function deleteProspect(prospectId) {
+  const res = await fetch(`${API}/prospects/${encodeURIComponent(prospectId)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
+  return true;
+}
+
+export async function exportProspectsCsv() {
+  const res = await fetch(`${API}/prospects/export.csv`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return await res.text();
+}
+
+export async function importProspectsCsv(csvText) {
+  return unwrap(
+    await fetch(`${API}/prospects/import`, {
+      method: "POST",
+      headers: { "Content-Type": "text/csv" },
+      body: csvText,
+    })
+  );
+}
+
 // ---------- B2B quotas ----------
 export async function fetchB2BQuotas() {
   return unwrap(await fetch(`${API}/b2b_quotas`));

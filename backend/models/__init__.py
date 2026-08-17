@@ -6,6 +6,10 @@ from models.order import (
 )
 from models.customer import (
     Customer, CustomerCreate, CustomerType, MemberTier, QuotaDeduction,
+    CustomerUpdate, SourceCategory,
+)
+from models.prospect import (
+    Prospect, ProspectCreate, ProspectStatus, ProspectUpdate,
 )
 from models.price import Price, PriceCreate, ServiceId
 from models.b2b_quota import (
@@ -18,6 +22,8 @@ __all__ = [
     "Order", "OrderCreate", "OrderEvent", "OrderSource", "OrderStatus",
     "PaymentStatus", "StatusUpdate", "STATUS_CHAIN",
     "Customer", "CustomerCreate", "CustomerType", "MemberTier", "QuotaDeduction",
+    "CustomerUpdate", "SourceCategory",
+    "Prospect", "ProspectCreate", "ProspectStatus", "ProspectUpdate",
     "Price", "PriceCreate", "ServiceId",
     "B2BQuota", "B2BQuotaCreate", "B2BQuotaUsageUpdate",
     "Staff", "StaffCreate", "StaffRole", "StaffPublic",

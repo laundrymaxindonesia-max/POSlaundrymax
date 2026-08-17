@@ -1,0 +1,34 @@
+{
+  "summary": "Iter-30 CRM (BAGIAN 1/2/3) — Backend: 11/11 pytest passed (customers filters, PATCH partial + phone-conflict 409, CSV export/import, prospects CRUD + convert + delete + CSV export/import + followed_up_at stamping). Frontend Playwright: /customers dual-tab renders, source & type filters return correct subsets (Walk-in Laskita filter returned 3 rows), customer-add-button + customer-edit-modal + customer-save-button POST/PATCH working, customer-export-button downloads customers-YYYY-MM-DD.csv, prospect-add flow POSTs correctly, prospect-send-offer opens wa.me popup (redirects to api.whatsapp.com/send correctly) and flips status to 'Sudah Ditawari', prospect-convert modal → convert-submit-button turns prospect into customer + status 'Konversi'. /tracking pagination: 7 rows/page, pagination-page-2 shows different first row, prev/next work. autocomplete: typing 'AUTO' shows autocomplete row for a customer with 2 orders → customer-history-modal opens with 2 history rows. Default view hides Selesai; bucket-Selesai click reveals Selesai orders.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/tracking", "issues": ["Bucket labeled 'SUDAH DIAMBIL' but testid is 'bucket-Selesai' and filter chip label reads 'Sudah Diambil' — cosmetic naming inconsistency between code (Selesai) and UI copy (Sudah Diambil). Functional OK but confusing for future devs."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter30_crm.py",
+    "/app/test_reports/pytest/iter30_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "CustomersScreen.jsx is 899 lines — exceeds 700-line threshold. Suggest splitting into CustomersScreen.jsx (shell) + tabs/ActiveCustomersTab.jsx + tabs/ProspectsTab.jsx + modals/ (CustomerEditModal, ProspectAddModal, ConvertProspectModal). Current file mixes 3 tabs, 3 modals, CSV helpers, WA link builder.",
+    "routes/customers.py import endpoint silently swallows Pydantic literal validation errors as 'skipped' with a text-only error message. Consider returning structured per-row errors so client can render actionable feedback.",
+    "prospect convert endpoint writes followed_up_at as an ISO string when previously None (line 173 `datetime.now(timezone.utc).isoformat()`) — inconsistent with PATCH which writes a datetime through serialize_for_mongo. Not user-visible but breaks type consistency in DB.",
+    "customers.py POST /import matches upsert on phone but re-uses `find_one` per row inside a loop — for large CSVs (>1k rows) this will be slow. Consider bulk_write with UpdateOne(upsert=True)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter30_crm.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "sessionStorage bypass: staff_pin_ok='true', staff_pin_id='test-staff', staff_pin_name='Tester', staff_pin_role='kasir' — used successfully.",
+  "seed_data_creation": "Created via in-browser fetch (Cloudflare bot rules block urllib): 1 prospect UIP_<ts>, 2 orders with customer_name AUTO<ts> for autocomplete, 9 orders PAG_<ts>_i for pagination, plus UI-created customer UI_ADD_<ts>. All TEST_/UI_/AUTO_/PAG_ prefixed for identification.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All iter-30 CRM endpoints and UI flows verified. Backend pytest: /app/backend/tests/test_iter30_crm.py (11 tests, all pass). If re-running frontend tests, note that urllib/requests calls to REACT_APP_BACKEND_URL are blocked by Cloudflare (403 error 1010) — must seed via page.evaluate fetch() from an already-loaded frontend page. POST /api/orders requires fields: order_id, customer_name, customer_phone, weight_kg, total_price (NOT 'total'), payment_status. sessionStorage staff PIN bypass works. wa.me links redirect to api.whatsapp.com/send in headless Chromium — validate URL substring 'wa.me/' before navigation OR check post-redirect URL contains 'whatsapp'."
+}

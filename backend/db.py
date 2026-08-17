@@ -30,6 +30,7 @@ b2b_quotas_col = db["b2b_quotas"]
 staff_col = db["staff"]
 attendance_col = db["attendance"]
 receipt_settings_col = db["receipt_settings"]
+prospects_col = db["prospects"]
 
 # ---- RBAC (Google Auth migration — scaffolding only for now) ----
 users_col = db["users"]

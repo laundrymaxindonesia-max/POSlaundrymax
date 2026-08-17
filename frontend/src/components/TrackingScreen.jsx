@@ -14,10 +14,13 @@ import {
   User,
   Phone,
   MapPin,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import HeaderNav from "@/components/HeaderNav";
 import { fetchOrders } from "@/lib/api";
+import CustomerHistoryModal from "@/components/tracking/CustomerHistoryModal";
 
 /**
  * Seven status buckets shown as counter badges. Order + labels intentionally
@@ -61,6 +64,8 @@ function formatTime(iso) {
   }
 }
 
+const PAGE_SIZE = 7;
+
 export default function TrackingScreen() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -68,6 +73,9 @@ export default function TrackingScreen() {
   const [query, setQuery] = useState("");
   const [activeBucket, setActiveBucket] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [page, setPage] = useState(1);
+  const [customerHistoryName, setCustomerHistoryName] = useState(null);
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
 
   const load = async () => {
     setRefreshing(true);
@@ -99,6 +107,11 @@ export default function TrackingScreen() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return orders.filter((o) => {
+      // Rule: hide "Selesai" (Sudah Diambil) by default unless the user
+      // explicitly clicks the Selesai bucket.
+      if (o.order_status === "Selesai" && activeBucket !== "Selesai") {
+        return false;
+      }
       const matchBucket = !activeBucket || o.order_status === activeBucket;
       if (!matchBucket) return false;
       if (!q) return true;
@@ -109,6 +122,40 @@ export default function TrackingScreen() {
       );
     });
   }, [orders, query, activeBucket]);
+
+  // Unique customer names for the autocomplete dropdown. Suggestions
+  // include every customer that has EVER placed an order (regardless of
+  // status/date) so the operator can pull a full history modal.
+  const nameSuggestions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+    const map = new Map();
+    for (const o of orders) {
+      const name = o.customer_name || "";
+      if (!name) continue;
+      if (!name.toLowerCase().includes(q)) continue;
+      if (!map.has(name)) {
+        map.set(name, {
+          name,
+          phone: o.customer_phone || "",
+          orderCount: 1,
+        });
+      } else {
+        map.get(name).orderCount += 1;
+      }
+    }
+    return Array.from(map.values()).slice(0, 6);
+  }, [orders, query]);
+
+  // Pagination — 7 rows per page. Reset to page 1 whenever filters change.
+  useEffect(() => {
+    setPage(1);
+  }, [query, activeBucket]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const paginated = filtered.slice(pageStart, pageStart + PAGE_SIZE);
 
   return (
     <div
@@ -147,7 +194,7 @@ export default function TrackingScreen() {
           </button>
         </div>
 
-        {/* Search */}
+        {/* Search + Autocomplete */}
         <div className="relative" data-testid="tracking-search-wrap">
           <Search
             size={16}
@@ -156,11 +203,53 @@ export default function TrackingScreen() {
           <input
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setShowAutocomplete(true);
+            }}
+            onFocus={() => setShowAutocomplete(true)}
+            onBlur={() =>
+              // Delay so dropdown clicks still register
+              setTimeout(() => setShowAutocomplete(false), 150)
+            }
             placeholder="Cari nama pelanggan / no. order / no. WA"
             data-testid="tracking-search-input"
             className="w-full h-12 pl-11 pr-4 rounded-2xl glass text-white placeholder-white/40 text-sm focus:border-[#FFD700]/50 focus:outline-none transition-colors"
           />
+          {showAutocomplete && nameSuggestions.length > 0 && (
+            <div
+              className="absolute top-full left-0 right-0 mt-2 rounded-2xl glass-strong border border-[#FFD700]/20 overflow-hidden shadow-2xl z-40"
+              data-testid="tracking-autocomplete"
+            >
+              {nameSuggestions.map((s) => (
+                <button
+                  key={s.name}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setShowAutocomplete(false);
+                    setCustomerHistoryName(s.name);
+                  }}
+                  data-testid={`autocomplete-row-${s.name}`}
+                  className="w-full flex items-center gap-3 p-3 hover:bg-[#FFD700]/8 border-b border-white/5 last:border-0 transition-colors text-left"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-[#FFD700]/10 border border-[#FFD700]/25 flex items-center justify-center text-[#FFD700] font-heading font-black text-sm flex-shrink-0">
+                    {s.name[0]}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-heading font-bold text-white text-sm truncate">
+                      {s.name}
+                    </div>
+                    <div className="text-white/40 text-[11px] font-mono truncate">
+                      {s.phone}
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-heading font-bold text-[#FFD700] uppercase tracking-wider flex-shrink-0">
+                    {s.orderCount}× order
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Status counter badges */}
@@ -255,7 +344,7 @@ export default function TrackingScreen() {
             </div>
           ) : (
             <div className="space-y-2" data-testid="tracking-list">
-              {filtered.map((o) => (
+              {paginated.map((o) => (
                 <button
                   key={o.id || o.order_id}
                   onClick={() => setSelected(o)}
@@ -298,6 +387,14 @@ export default function TrackingScreen() {
                   </div>
                 </button>
               ))}
+
+              {totalPages > 1 && (
+                <Pagination
+                  current={currentPage}
+                  total={totalPages}
+                  onPage={setPage}
+                />
+              )}
             </div>
           )}
         </section>
@@ -425,6 +522,73 @@ export default function TrackingScreen() {
           </div>
         </div>
       )}
+
+      {customerHistoryName && (
+        <CustomerHistoryModal
+          customerName={customerHistoryName}
+          orders={orders}
+          onClose={() => setCustomerHistoryName(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Compact pager rendered under the order list. Shows first, previous,
+ *  current window and last-page shortcuts (1 … 4 5 6 … 12). */
+function Pagination({ current, total, onPage }) {
+  const pages = new Set([1, total, current, current - 1, current + 1]);
+  const items = Array.from(pages)
+    .filter((p) => p >= 1 && p <= total)
+    .sort((a, b) => a - b);
+  const rendered = [];
+  let prev = 0;
+  for (const p of items) {
+    if (p - prev > 1) rendered.push({ ellipsis: true, key: `e${p}` });
+    rendered.push({ page: p, key: `p${p}` });
+    prev = p;
+  }
+  return (
+    <div
+      className="flex items-center justify-center gap-1 pt-2"
+      data-testid="tracking-pagination"
+    >
+      <button
+        onClick={() => onPage(current - 1)}
+        disabled={current === 1}
+        data-testid="pagination-prev"
+        className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 text-white/70 disabled:opacity-30 flex items-center justify-center hover:border-white/25"
+      >
+        <ChevronLeft size={14} />
+      </button>
+      {rendered.map((r) =>
+        r.ellipsis ? (
+          <span key={r.key} className="text-white/40 text-xs px-1">
+            …
+          </span>
+        ) : (
+          <button
+            key={r.key}
+            onClick={() => onPage(r.page)}
+            data-testid={`pagination-page-${r.page}`}
+            className={`w-9 h-9 rounded-lg text-xs font-heading font-bold transition ${
+              r.page === current
+                ? "bg-[#FFD700] text-black"
+                : "bg-white/5 border border-white/10 text-white/70 hover:border-white/25"
+            }`}
+          >
+            {r.page}
+          </button>
+        )
+      )}
+      <button
+        onClick={() => onPage(current + 1)}
+        disabled={current === total}
+        data-testid="pagination-next"
+        className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 text-white/70 disabled:opacity-30 flex items-center justify-center hover:border-white/25"
+      >
+        <ChevronRight size={14} />
+      </button>
     </div>
   );
 }
