@@ -34,12 +34,15 @@ import {
 } from "@/lib/orderStore";
 import {
   fetchOrders,
+  fetchOrderById,
   fetchReceiptSettings,
   patchOrderStatus,
   uploadPod,
+  parseQrPayload,
 } from "@/lib/api";
 import { getActorTag, getCurrentStaff } from "@/lib/staffSession";
 import { printReceipt } from "@/lib/receiptPrinter";
+import QrScanner from "@/components/QrScanner";
 import { Printer as PrinterIcon, FileText, ClipboardList, Tag } from "lucide-react";
 
 function mapBackendOrder(o) {
@@ -185,28 +188,6 @@ export default function CourierDashboard() {
   const handleScanPickup = () => {
     setScanMode("pickup");
     setScanOpen(true);
-    scanTimerRef.current = setTimeout(() => {
-      const newId =
-        "LND-" +
-        String(Math.floor(Math.random() * 900) + 100).padStart(3, "0");
-      const newWeight = (Math.random() * 3 + 1).toFixed(1) + " kg";
-      setManifest((prev) => [
-        {
-          id: newId,
-          customer: "Tamel",
-          weight: newWeight,
-          time: new Date().toLocaleTimeString("id-ID", {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-        },
-        ...prev,
-      ]);
-      toast.success(`Bag ${newId} masuk manifest`, {
-        description: `Total ${manifest.length + 1} bag siap diangkut`,
-      });
-      setScanOpen(false);
-    }, 1500);
   };
 
   const handleScanMotorLoad = () => {
@@ -216,28 +197,74 @@ export default function CourierDashboard() {
     }
     setScanMode("motor");
     setScanOpen(true);
-    scanTimerRef.current = setTimeout(async () => {
-      const picked = readyOrders[0];
-      if (!picked) {
-        setScanOpen(false);
-        return;
-      }
+  };
+
+  const busyRef = useRef(false);
+
+  const handleQrDecoded = async (decoded) => {
+    if (busyRef.current) return;
+    const orderId = parseQrPayload(decoded);
+    if (!orderId) {
+      toast.error("QR tidak dikenali");
+      return;
+    }
+    busyRef.current = true;
+
+    if (scanMode === "pickup") {
+      // JEMPUT — add scanned bag to the courier manifest live from DB
       try {
-        const actor = getActorTag();
-        await patchOrderStatus(picked.id, "OTW", actor);
-        setReadyOrders((prev) => prev.filter((o) => o.id !== picked.id));
-        setOnMotorOrders((prev) =>
-          prev.some((m) => m.id === picked.id) ? prev : [picked, ...prev]
-        );
-        toast.success(`Order ${picked.id} masuk motor`, {
-          description: `Status: Sedang Diantar · oleh ${currentStaff?.name || "kurir"}`,
+        const order = await fetchOrderById(orderId);
+        setManifest((prev) => {
+          if (prev.some((m) => m.id === order.order_id)) return prev;
+          return [
+            {
+              id: order.order_id,
+              customer: order.customer_name || "-",
+              weight: order.weight_kg ? `${order.weight_kg.toFixed(1)} kg` : "-",
+              time: new Date().toLocaleTimeString("id-ID", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            },
+            ...prev,
+          ];
         });
+        toast.success(`Bag ${order.order_id} masuk manifest`);
       } catch (e) {
-        toast.error(`Gagal update status: ${e.message}`);
+        if (e.status === 404) {
+          toast.error(`Order ${orderId} tidak ditemukan di database`);
+        } else {
+          toast.error(`Gagal memuat order: ${e.message}`);
+        }
       } finally {
         setScanOpen(false);
+        setTimeout(() => (busyRef.current = false), 700);
       }
-    }, 1200);
+      return;
+    }
+
+    // ANTAR — flip ready-order to OTW
+    try {
+      const target = readyOrders.find((o) => o.id === orderId);
+      if (!target) {
+        toast.error(`Bag ${orderId} bukan di daftar Menunggu di Outlet`);
+        return;
+      }
+      const actor = getActorTag() || "kurir";
+      await patchOrderStatus(orderId, "OTW", actor);
+      setReadyOrders((prev) => prev.filter((o) => o.id !== orderId));
+      setOnMotorOrders((prev) =>
+        prev.some((m) => m.id === orderId) ? prev : [target, ...prev]
+      );
+      toast.success(`Order ${orderId} masuk motor`, {
+        description: `Status: Sedang Diantar · oleh ${currentStaff?.name || "kurir"}`,
+      });
+      setScanOpen(false);
+    } catch (e) {
+      toast.error(`Gagal update status: ${e.message}`);
+    } finally {
+      setTimeout(() => (busyRef.current = false), 700);
+    }
   };
 
   const handleCloseScan = (open) => {
@@ -795,74 +822,18 @@ export default function CourierDashboard() {
         </div>
       )}
 
-      {/* Pickup Scanner Modal */}
-      <Dialog open={scanOpen} onOpenChange={handleCloseScan}>
-        <DialogContent
-          className="bg-[#0a0a0a] border-white/10 text-white max-w-sm rounded-3xl p-5"
-          data-testid="pickup-scanner-modal"
-        >
-          <DialogHeader>
-            <DialogTitle className="font-heading font-bold text-[#FFD700] flex items-center gap-2">
-              <ScanLine size={18} />
-              {scanMode === "motor" ? "Scan Barang Masuk Motor" : "Scan Bag Pickup"}
-            </DialogTitle>
-            <DialogDescription className="text-white/50 text-xs">
-              {scanMode === "motor"
-                ? "Sorot QR code pada paket yang siap diantar."
-                : "Sorot QR code pada tag bag cucian pelanggan."}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="relative aspect-square rounded-2xl overflow-hidden bg-black border border-white/10">
-            <div
-              className="absolute inset-0 opacity-50"
-              style={{
-                background:
-                  "radial-gradient(ellipse at center, rgba(255,215,0,0.08) 0%, rgba(0,0,0,0.95) 70%)",
-              }}
-            />
-            <div
-              className="absolute inset-0 opacity-20"
-              style={{
-                backgroundImage:
-                  "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
-              }}
-            />
-            <div className="absolute inset-10 pointer-events-none">
-              <div className="absolute top-0 left-0 w-8 h-8 border-t-[3px] border-l-[3px] border-[#FFD700] rounded-tl-xl" />
-              <div className="absolute top-0 right-0 w-8 h-8 border-t-[3px] border-r-[3px] border-[#FFD700] rounded-tr-xl" />
-              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-[3px] border-l-[3px] border-[#FFD700] rounded-bl-xl" />
-              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-[3px] border-r-[3px] border-[#FFD700] rounded-br-xl" />
-              <div className="absolute inset-x-0 top-0 h-full overflow-hidden">
-                <div
-                  className="absolute inset-x-2 h-[3px] bg-gradient-to-r from-transparent via-[#FFD700] to-transparent animate-scan-line shadow-[0_0_16px_rgba(255,215,0,0.9)]"
-                  data-testid="pickup-scanner-line"
-                />
-              </div>
-            </div>
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-              <div className="font-mono text-[10px] text-[#FFD700]/70 uppercase tracking-[0.25em]">
-                Arahkan ke QR Code
-              </div>
-            </div>
-            <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center font-mono text-[9px] text-white/40 uppercase tracking-widest">
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#FFD700] animate-pulse" />
-                LIVE
-              </span>
-              <span>CAM · {scanMode === "motor" ? "MOTOR LOAD" : "PICKUP"}</span>
-            </div>
-          </div>
-
-          <button
-            onClick={() => handleCloseScan(false)}
-            data-testid="pickup-cancel-scan"
-            className="w-full h-11 rounded-xl bg-white/5 border border-white/10 text-white/80 text-sm font-medium hover:bg-white/10 transition-colors flex items-center justify-center gap-2 mt-1"
-          >
-            <X size={14} /> Batal
-          </button>
-        </DialogContent>
-      </Dialog>
+      {/* Real QR Scanner — shared between JEMPUT (pickup) & ANTAR (motor) */}
+      <QrScanner
+        open={scanOpen}
+        onOpenChange={handleCloseScan}
+        onScan={handleQrDecoded}
+        title={scanMode === "motor" ? "Scan Barang Masuk Motor" : "Scan Bag Pickup"}
+        helper={
+          scanMode === "motor"
+            ? "Sorot QR code pada bag siap antar (status Packing)"
+            : "Sorot QR code pada bag jemputan pelanggan"
+        }
+      />
 
       {/* Proof of Delivery Modal */}
       <Dialog open={podOpen} onOpenChange={handleClosePod}>

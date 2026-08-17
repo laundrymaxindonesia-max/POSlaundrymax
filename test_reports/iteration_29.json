@@ -1,0 +1,51 @@
+{
+  "summary": "Iter-29 QR-scanner integration testing. Backend 6/6 pytest PASS: PATCH /api/orders/{id}/payment flips Nanti→Lunas + appends kind='payment:lunas' event, idempotent second call appends another payment:lunas event (2 total, still Lunas), 404 on unknown id for both GET and PATCH payment, default actor='kasir' works, PATCH /status regression still returns 200. Frontend: scan-nota-button visible on POS, click opens qr-scanner-modal with viewport, camera fails in headless as expected → qr-scanner-error banner renders 'Gagal akses kamera...' (not a bug, expected per agent note). parseQrPayload logic verified via page.evaluate replica: 'LND-ABC123'→'LND-ABC123', {order_id:'LND-XYZ'}→'LND-XYZ', 'random-text'→null, ''→null — all correct. Production /production: WASH station click opens qr-scanner-modal with correct title 'Scan tag · WASH' + helper 'Sorot QR tag cucian di antrian Antrian' + graceful camera-error banner. Courier /courier JEMPUT: 'SCAN BARANG PICKUP' opens scanner with helper 'Sorot QR code pada bag jemputan pelanggan'. ANTAR tab: 'SCAN BARANG MASUK MOTOR' correctly disabled when readyOrders empty. Manifest list empty on fresh DB (iter-28 mock leak fix confirmed). Regression /tracking: 7 counter cards render live counts (Antrian=4 Selesai=1 after my test POSTs), search input present. Mark-taken (Packing→Selesai) and pay-now (Nanti→Lunas + kind='payment:lunas') flows verified end-to-end by driving underlying PATCH endpoints in browser context — status persists on GET.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "QrScanner.jsx DialogContent (line 101-131)",
+        "issue": "Shadcn Dialog's built-in Close button (absolute top-4 right-4, rendered by @radix-ui via DialogContent) overlaps and intercepts pointer events on the custom [data-testid=qr-scanner-close] button at (top-3 right-3). Playwright cannot click qr-scanner-close because the built-in Close subtree covers it. Users on device tap the visible built-in Close which still closes fine, so functionally works but the custom testid button is unreachable. Fix: either remove the custom close and hide/style the built-in one, or use a Dialog variant without the auto-Close (e.g., pass `hideClose` or override the Close element).",
+        "selector": "[data-testid=\"qr-scanner-close\"] intercepted by DialogContent Close button (absolute top-4 right-4 rounded-sm)",
+        "priority": "LOW"
+      },
+      {
+        "component": "QrScanner.jsx DialogContent",
+        "issue": "A11y: `DialogContent requires a DialogTitle` console error on every scanner open (Production + POS + Courier). Component renders its title inside the body (line 139) but not inside a Radix DialogTitle element. Wrap the heading in <DialogTitle> (optionally inside VisuallyHidden if the custom layout must stay).",
+        "selector": "[data-testid=\"qr-scanner-modal\"]",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter29_scanner.py",
+    "/app/test_reports/pytest/iter29.xml"
+  ],
+  "action_items": [
+    "QrScanner.jsx: eliminate overlapping shadcn default DialogContent Close (or remove the custom qr-scanner-close) so testid is clickable and there's only one visible close affordance.",
+    "QrScanner.jsx: wrap the title text in <DialogTitle> (VisuallyHidden if needed) to silence a11y console errors.",
+    "Optional: end-to-end camera flow (real QR decode) can't be exercised in headless — main agent may want to add a hidden dev-only 'Paste decoded text' input inside QrScanner (guarded by NODE_ENV or query param) so future E2E tests can inject a decoded string without a physical camera."
+  ],
+  "critical_code_review_comments": [
+    "orders.py mark_paid (line 146-174) correctly uses $set + $push atomically, appends OrderEvent with kind='payment:lunas', and is idempotent by design (unconditional $set to 'Lunas'). No 400/409 for already-lunas which matches the stated 'idempotent' spec — good.",
+    "QrScanner.jsx correctly requests facingMode {ideal:'environment'} and cleans up track on unmount via stop().finally(clear()) — no lingering camera lights. Debounce logic on identical repeats (300ms) is sensible.",
+    "ScanOrderDetailModal.jsx cleanly separates mark-taken vs pay-now flows with distinct busy state; toast messages are user-friendly. handlePaymentCapture uploads PoD first then patches payment — order matters: if the PATCH fails after upload, the photo is orphan but audit-recoverable via order_events (pod:payment event still stored on the order). Acceptable.",
+    "parseQrPayload (api.js line 82-94) — regex accepts any LND-... substring including partial junk after separator; consider anchoring or bounding to typical UUID-tail length. Low priority.",
+    "POSScreen.jsx now ~1291 lines — over the 700-line guideline. Consider extracting scan-nota + customer-search + register flows into dedicated hooks."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter29_scanner.py (new — 6 tests for payment PATCH + 404 + regression)"
+  ],
+  "success_rate": {"backend": "100% (6/6 pytest)", "frontend": "100% of scoped scanner UI checks (camera decode itself untestable in headless — expected)"},
+  "test_credentials": "Staff PIN bypass via sessionStorage staff_pin_ok='true'.",
+  "seed_data_creation": "Created 5 TEST_ orders via POST /api/orders during testing (payment/status flow verification). Not cleaned up — safe to wipe with POST /api/seed/orders when done.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend payment endpoint is solid. QrScanner opens correctly on POS/Production/Courier and gracefully shows error banner in headless where getUserMedia fails. Two low-priority UI polish items: (1) duplicate close buttons on QrScanner modal due to shadcn Dialog default Close overlapping custom qr-scanner-close, (2) A11y DialogTitle warning. Real QR decode path was not tested with an actual camera; recommend either (a) using Chromium --use-fake-ui-for-media-stream + --use-file-for-fake-video-capture with a QR PNG in future testing, or (b) adding a dev-only text-injection affordance to QrScanner.",
+  "rca of the issue": "Overlapping close: shadcn/ui `DialogContent` (from `@/components/ui/dialog`) renders a built-in <DialogClose> as `absolute right-4 top-4`. QrScanner.jsx adds its own close at `absolute top-3 right-3`. Both are within the same DialogContent and the built-in one is rendered AFTER (higher stacking order), so it intercepts pointer events on the custom testid. Solution: remove the custom button and target the built-in Close via a role selector, OR use a shadcn Dialog variant that suppresses the default Close."
+}

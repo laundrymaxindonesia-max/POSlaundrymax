@@ -41,6 +41,9 @@ export async function fetchOrder(orderId) {
   return unwrap(await fetch(`${API}/orders/${encodeURIComponent(orderId)}`));
 }
 
+// Legacy alias — several new callers use fetchOrderById()
+export const fetchOrderById = fetchOrder;
+
 export async function createOrder(payload) {
   return unwrap(
     await fetch(`${API}/orders`, {
@@ -59,6 +62,35 @@ export async function patchOrderStatus(orderId, newStatus, actor) {
       body: JSON.stringify({ new_status: newStatus, actor }),
     })
   );
+}
+
+export async function markOrderPaid(orderId, actor = "kasir") {
+  return unwrap(
+    await fetch(
+      `${API}/orders/${encodeURIComponent(orderId)}/payment?actor=${encodeURIComponent(actor)}`,
+      { method: "PATCH" }
+    )
+  );
+}
+
+/**
+ * parseQrPayload — extract an `order_id` from the raw QR string. Accepts
+ * either the plain `LND-xxx` label used on Bag tags OR a JSON blob emitted
+ * by the POS QR modal `{order_id, customer, ...}`.
+ * Returns `null` if nothing looks like an order id.
+ */
+export function parseQrPayload(text) {
+  if (!text) return null;
+  const raw = String(text).trim();
+  if (raw.startsWith("{")) {
+    try {
+      const obj = JSON.parse(raw);
+      if (obj && typeof obj.order_id === "string") return obj.order_id;
+    } catch (e) { /* fall through */ }
+  }
+  const match = raw.match(/(LND-[A-Za-z0-9\-]+)/i);
+  if (match) return match[1];
+  return null;
 }
 
 export async function uploadPod(orderId, { actor, kind = "delivery", photo, lat, lng }) {

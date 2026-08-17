@@ -6,6 +6,7 @@ POST   /api/orders                        → create a new order (auto-seed firs
 GET    /api/orders                        → list orders with optional filters
 GET    /api/orders/{order_id}             → fetch single order
 PATCH  /api/orders/{order_id}/status      → transition status + append event
+PATCH  /api/orders/{order_id}/payment     → mark bayar-nanti order as lunas
 POST   /api/orders/{order_id}/pod         → upload proof-of-delivery photos
 """
 
@@ -142,7 +143,35 @@ async def update_status(order_id: str, payload: StatusUpdate) -> Order:
     return await _hydrate_pod_urls(Order(**deserialize_from_mongo(updated)))
 
 
-# ---------------- POST /api/orders/{order_id}/pod ----------------
+@router.patch("/{order_id}/payment", response_model=Order)
+async def mark_paid(order_id: str, actor: str = Query(default="kasir")) -> Order:
+    """Flip an order from payment_status='Nanti' to 'Lunas' and log an event.
+
+    Used by the POS scan-nota flow after the cashier captures a payment
+    proof photo. Idempotent — calling on an already-lunas order is a no-op
+    (still logs an event so the audit trail shows the second confirmation).
+    """
+    row = await orders_col.find_one({"order_id": order_id}, {"_id": 0})
+    if not row:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    event = OrderEvent(
+        status=row["order_status"],  # order_status unchanged; kind carries the intent
+        actor=actor,
+        timestamp=datetime.now(timezone.utc),
+        kind="payment:lunas",
+    )
+    event_doc = serialize_for_mongo(event.model_dump())
+
+    await orders_col.update_one(
+        {"order_id": order_id},
+        {
+            "$set": {"payment_status": "Lunas"},
+            "$push": {"order_events": event_doc},
+        },
+    )
+    updated = await orders_col.find_one({"order_id": order_id}, {"_id": 0})
+    return await _hydrate_pod_urls(Order(**deserialize_from_mongo(updated)))
 @router.post("/{order_id}/pod", response_model=Order)
 async def upload_pod(
     order_id: str,

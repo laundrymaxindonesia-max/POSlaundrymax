@@ -30,9 +30,11 @@ import { pushPendingOrder } from "@/lib/orderStore";
 import {
   createOrder,
   deductQuota,
+  fetchOrderById,
   fetchPrices,
   searchCustomers,
   createCustomer,
+  parseQrPayload,
   uploadPod,
 } from "@/lib/api";
 import { getActorTag, getCurrentStaff } from "@/lib/staffSession";
@@ -57,6 +59,8 @@ import OrderSource from "@/components/pos/OrderSource";
 import ServiceTabs from "@/components/pos/ServiceTabs";
 import CartSummary from "@/components/pos/CartSummary";
 import CameraCapture from "@/components/CameraCapture";
+import QrScanner from "@/components/QrScanner";
+import ScanOrderDetailModal from "@/components/pos/ScanOrderDetailModal";
 
 
 export default function POSScreen() {
@@ -694,6 +698,40 @@ export default function POSScreen() {
   const [customerSearchResults, setCustomerSearchResults] = useState([]);
   const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
 
+  // Scan Nota Pelanggan flow — real QR camera → GET order → detail modal
+  const [scanNotaOpen, setScanNotaOpen] = useState(false);
+  const [scanDetailOpen, setScanDetailOpen] = useState(false);
+  const [scanOrder, setScanOrder] = useState(null);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanError, setScanError] = useState("");
+
+  const handleScanNotaResult = async (decoded) => {
+    const orderId = parseQrPayload(decoded);
+    if (!orderId) {
+      toast.error("QR tidak dikenali", {
+        description: "Payload tidak berisi order_id.",
+      });
+      return;
+    }
+    setScanNotaOpen(false);
+    setScanDetailOpen(true);
+    setScanLoading(true);
+    setScanError("");
+    setScanOrder(null);
+    try {
+      const order = await fetchOrderById(orderId);
+      setScanOrder(order);
+    } catch (e) {
+      setScanError(
+        e.status === 404
+          ? `Order ${orderId} tidak ditemukan di database.`
+          : `Gagal memuat order: ${e.message}`
+      );
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
   // Debounced fetch as the cashier types
   useEffect(() => {
     const q = customerName.trim();
@@ -789,6 +827,16 @@ export default function POSScreen() {
       </header>
 
       <main className="px-5 pt-4 pb-44 space-y-4">
+        {/* Scan Nota Pelanggan — pickup / payment lookup via QR */}
+        <button
+          onClick={() => setScanNotaOpen(true)}
+          data-testid="scan-nota-button"
+          className="w-full h-14 rounded-2xl bg-gradient-to-r from-[#FFD700] to-[#FFE966] text-black font-heading font-extrabold text-sm tracking-wide flex items-center justify-center gap-2 hover:from-[#ffdf33] hover:to-[#fff08a] active:scale-[0.98] transition-all shadow-[0_8px_30px_rgba(255,215,0,0.3)] animate-fade-up"
+        >
+          <QrCode size={18} strokeWidth={2.5} />
+          SCAN NOTA PELANGGAN
+        </button>
+
         {/* Customer + Source */}
         <section className="animate-fade-up space-y-3" style={{ animationDelay: "60ms" }}>
           <CustomerSelection
@@ -1219,6 +1267,23 @@ export default function POSScreen() {
             }
           }
         }}
+      />
+
+      {/* Scan Nota Pelanggan — real QR camera */}
+      <QrScanner
+        open={scanNotaOpen}
+        onOpenChange={setScanNotaOpen}
+        onScan={handleScanNotaResult}
+        title="Scan Nota Pelanggan"
+        helper="Arahkan kamera ke QR pada nota pelanggan"
+      />
+      <ScanOrderDetailModal
+        open={scanDetailOpen}
+        onOpenChange={setScanDetailOpen}
+        order={scanOrder}
+        loading={scanLoading}
+        error={scanError}
+        onOrderUpdated={(updated) => setScanOrder(updated)}
       />
     </div>
   );

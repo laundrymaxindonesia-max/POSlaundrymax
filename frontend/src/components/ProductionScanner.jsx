@@ -21,7 +21,8 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import HeaderNav from "@/components/HeaderNav";
-import { fetchOrders, patchOrderStatus } from "@/lib/api";
+import QrScanner from "@/components/QrScanner";
+import { fetchOrders, fetchOrderById, patchOrderStatus, parseQrPayload } from "@/lib/api";
 import { getActorTag, getCurrentStaff } from "@/lib/staffSession";
 
 const STATIONS = [
@@ -134,66 +135,66 @@ export default function ProductionScanner() {
     loadRecent();
   }, []);
 
-  const handleStationClick = async (station) => {
+  const handleStationClick = (station) => {
     setActiveStation(station);
     setScanOpen(true);
-    // Pick the oldest order whose current status is the prerequisite for this station
-    let candidate = null;
+  };
+
+  const busyRef = useRef(false);
+
+  const handleQrDecoded = async (decoded) => {
+    if (busyRef.current) return;
+    const orderId = parseQrPayload(decoded);
+    if (!orderId) {
+      toast.error("QR tidak dikenali");
+      return;
+    }
+    if (!activeStation) return;
+    busyRef.current = true;
     try {
-      const rows = await fetchOrders({ status: station.sourceStatus, limit: 50 });
-      if (Array.isArray(rows) && rows.length > 0) {
-        candidate = rows[rows.length - 1]; // oldest (created_at DESC → last)
+      const order = await fetchOrderById(orderId);
+      if (order.order_status !== activeStation.sourceStatus) {
+        toast.error(`${orderId} bukan di antrian ${activeStation.label}`, {
+          description: `Status saat ini: ${order.order_status}. Butuh ${activeStation.sourceStatus}.`,
+        });
+        return;
       }
-    } catch (e) {
-      toast.error(`Gagal mengambil antrian: ${e.message}`);
+      const updated = await patchOrderStatus(
+        orderId,
+        activeStation.targetStatus,
+        getActorTag() || "produksi"
+      );
+      toast.success(`${orderId} → ${activeStation.label}`, {
+        description: `Oleh ${currentStaff?.name || "staff"}`,
+      });
+      setRecentScans((prev) => [
+        {
+          id: updated.order_id,
+          customer: updated.customer_name,
+          status: activeStation.label,
+          backendStatus: updated.order_status,
+          time: new Date().toLocaleTimeString("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        },
+        ...prev.filter((s) => s.id !== updated.order_id).slice(0, 11),
+      ]);
+      // Close after a successful scan so next bag can be scanned fresh
       setScanOpen(false);
       setActiveStation(null);
-      return;
-    }
-
-    if (!candidate) {
-      timerRef.current = setTimeout(() => {
-        toast.info("Tidak ada order di antrian", {
-          description: `Tidak ada order dengan status ${station.sourceStatus}.`,
-        });
-        setScanOpen(false);
-        setActiveStation(null);
-      }, 900);
-      return;
-    }
-
-    // Simulate scanning delay then PATCH status
-    timerRef.current = setTimeout(async () => {
-      try {
-        const actor = getActorTag();
-        const updated = await patchOrderStatus(
-          candidate.order_id,
-          station.targetStatus,
-          actor
-        );
-        toast.success(`${candidate.order_id} → ${station.label}`, {
-          description: `Oleh ${currentStaff?.name || "staff"}`,
-        });
-        setRecentScans((prev) => [
-          {
-            id: updated.order_id,
-            customer: updated.customer_name,
-            status: station.label,
-            backendStatus: updated.order_status,
-            time: new Date().toLocaleTimeString("id-ID", {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          },
-          ...prev.filter((s) => s.id !== updated.order_id).slice(0, 11),
-        ]);
-      } catch (e) {
+    } catch (e) {
+      if (e.status === 404) {
+        toast.error(`Order ${orderId} tidak ditemukan di database`);
+      } else {
         toast.error(`Gagal update: ${e.message}`);
-      } finally {
-        setScanOpen(false);
-        setActiveStation(null);
       }
-    }, 1200);
+    } finally {
+      // small cooldown so a single QR isn't decoded twice in quick succession
+      setTimeout(() => {
+        busyRef.current = false;
+      }, 800);
+    }
   };
 
   useEffect(() => {
@@ -202,13 +203,9 @@ export default function ProductionScanner() {
     };
   }, []);
 
-  const handleCloseModal = (open) => {
-    if (!open && timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-      setActiveStation(null);
-    }
+  const handleCloseScanner = (open) => {
     setScanOpen(open);
+    if (!open) setActiveStation(null);
   };
 
   const activeOrdersCount = recentScans.filter(
@@ -376,90 +373,18 @@ export default function ProductionScanner() {
         </section>
       </main>
 
-      {/* Scanner Dialog */}
-      <Dialog open={scanOpen} onOpenChange={handleCloseModal}>
-        <DialogContent
-          className="bg-[#0a0a0a] border-white/10 text-white max-w-sm rounded-3xl p-5"
-          data-testid="scanner-modal"
-        >
-          <DialogHeader>
-            <DialogTitle className="font-heading font-bold text-[#FFD700] flex items-center gap-2">
-              <ScanLine size={18} />
-              Scanning — {activeStation?.label}
-            </DialogTitle>
-            <DialogDescription className="text-white/50 text-xs">
-              Sorot QR code tag cucian untuk memperbarui status stasiun.
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* Scanner viewport */}
-          <div
-            className="relative aspect-square rounded-2xl overflow-hidden bg-black border border-white/10"
-            data-testid="scanner-viewport"
-          >
-            {/* Simulated camera noise */}
-            <div
-              className="absolute inset-0 opacity-50"
-              style={{
-                background:
-                  "radial-gradient(ellipse at center, rgba(255,215,0,0.08) 0%, rgba(0,0,0,0.95) 70%)",
-              }}
-            />
-            <div
-              className="absolute inset-0 opacity-20"
-              style={{
-                backgroundImage:
-                  "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
-              }}
-            />
-
-            {/* QR frame corners */}
-            <div className="absolute inset-10 pointer-events-none">
-              <div className="absolute top-0 left-0 w-8 h-8 border-t-[3px] border-l-[3px] border-[#FFD700] rounded-tl-xl" />
-              <div className="absolute top-0 right-0 w-8 h-8 border-t-[3px] border-r-[3px] border-[#FFD700] rounded-tr-xl" />
-              <div className="absolute bottom-0 left-0 w-8 h-8 border-b-[3px] border-l-[3px] border-[#FFD700] rounded-bl-xl" />
-              <div className="absolute bottom-0 right-0 w-8 h-8 border-b-[3px] border-r-[3px] border-[#FFD700] rounded-br-xl" />
-
-              {/* Scanning line */}
-              <div className="absolute inset-x-0 top-0 h-full overflow-hidden">
-                <div
-                  className="absolute inset-x-2 h-[3px] bg-gradient-to-r from-transparent via-[#FFD700] to-transparent animate-scan-line shadow-[0_0_16px_rgba(255,215,0,0.9)]"
-                  data-testid="scanner-line"
-                />
-              </div>
-            </div>
-
-            {/* Center indicator */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
-              <div className="font-mono text-[10px] text-[#FFD700]/70 uppercase tracking-[0.25em]">
-                Arahkan ke QR Code
-              </div>
-            </div>
-
-            {/* Bottom stats */}
-            <div className="absolute bottom-2 left-2 right-2 flex justify-between items-center font-mono text-[9px] text-white/40 uppercase tracking-widest">
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#FFD700] animate-pulse" />
-                LIVE
-              </span>
-              <span>CAM_01 · {activeStation?.label}</span>
-            </div>
-          </div>
-
-          <div className="mt-2 flex items-center justify-center gap-2 text-white/50 text-xs">
-            <CheckCircle2 size={14} className="text-[#FFD700]" />
-            <span>Auto-confirm dalam 1.5 detik...</span>
-          </div>
-
-          <button
-            onClick={() => handleCloseModal(false)}
-            data-testid="cancel-scan-button"
-            className="w-full h-11 rounded-xl bg-white/5 border border-white/10 text-white/80 text-sm font-medium hover:bg-white/10 transition-colors flex items-center justify-center gap-2 mt-1"
-          >
-            <X size={14} /> Batal
-          </button>
-        </DialogContent>
-      </Dialog>
+      {/* Real QR Scanner */}
+      <QrScanner
+        open={scanOpen}
+        onOpenChange={handleCloseScanner}
+        onScan={handleQrDecoded}
+        title={`Scan tag · ${activeStation?.label || ""}`}
+        helper={
+          activeStation
+            ? `Sorot QR tag cucian di antrian ${activeStation.sourceStatus}`
+            : "Pilih stasiun terlebih dahulu"
+        }
+      />
     </div>
   );
 }
