@@ -1,0 +1,56 @@
+{
+  "summary": "Iter-28 verified end-to-end: (1) Backend 11/11 pytest passed — /api/seed/all now returns orders.inserted=0 + customers.inserted=0 (prices/b2b/staff still seeded), GET /api/orders and /api/customers both [] after seed, /api/receipt-settings exposes new logo_url field, PUT logo_url persists across GET, logo_url >500 chars rejected (422), models.users imports (User/UserSession/RoleAssignment) with ROLE_HIERARCHY = ['super_admin','kasir','produksi','kurir'], db.users_col + user_sessions_col + role_assignments_col accessible with insert_one round-trip. (2) POS autocomplete FIX confirmed: typing 'And' shows customer-search-dropdown with results BUT regular-customer-hint & member-active-badge remain hidden until explicit click. Clicking a customer-search-result-{id} row loads profile + toast 'Pelanggan dipilih: X' + populates hint. Editing name field after pick immediately clears the hint (selectedCustomerId cleared). (3) POS persistence: SIMPAN PELANGGAN REGULER modal saves via createCustomer → toast 'Pelanggan Zaki Persist tersimpan di database', reload + type 'Za' surfaces the row via GET /api/customers?q=. (4) POS reset: Mulai Order Baru clears customerName='', kg back to 0, speedTier=reguler, sumberOrder=walkin — NO refresh needed. (5) QR modal WA buttons wa-send-text-button + wa-send-image-button render; text button opens wa.me/6289990002222?text=... with rendered receipt template. (6) /tracking route: HeaderNav nav-tracking pill wired, 7 buckets (Antrian/Cuci/Kering/Setrika/Packing/OTW/Selesai) show live counts from GET /api/orders, empty state 'Belum ada order' at 0. After saving 1 order → Antrian=1, tracking-row-{orderId} clickable, tracking-detail-sheet opens with tracking-history + customer/weight/total, close dismisses. tracking-search-input filters (search 'Zaki' → 1 order). Bucket click activates filter + clear-bucket-filter clears. (7) Admin /admin → Pengaturan Nota renders store-input-logo_url textbox, SIMPAN PENGATURAN NOTA button present. (8) Production Scanner recent-scans-list contains no mock names (Budi/Dedi/Rina leak absent).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "CourierDashboard.jsx (lines 45-48, 171)",
+        "issue": "REGRESSION: `INITIAL_MANIFEST` array still hardcodes 3 mock bags (LND-011 Tamel 2.5kg 11:02, LND-012 Tamel 3.0kg 11:05, LND-013 Tamel 1.5kg 11:08) and is used as `useState(INITIAL_MANIFEST)`. On fresh DB the Kurir → JEMPUT tab shows 'Manifest Angkutan · 3 BAGS' with these fake rows + 'ANGKUT SEMUA (3 BAGS)' button. Iter-28 scope required no hardcoded mock rows — the manifest state should initialize to [] and hydrate from DB (e.g., orders in Antrian/OTW pickup queue).",
+        "selector": "Kurir tab: text 'Manifest Angkutan', rows without data-testid but LND-011/012/013 visible",
+        "priority": "HIGH"
+      },
+      {
+        "component": "CourierDashboard.jsx (INITIAL_READY_ORDERS array lines 51-105)",
+        "issue": "MINOR: The `INITIAL_READY_ORDERS` constant is still defined (Kosan Wins / Rina Permata / Apartemen Gateway rows) though no longer used as initial state (readyOrders=[]). Dead code that risks accidental reintroduction of mocks — safe to delete.",
+        "selector": "n/a — source-only",
+        "priority": "LOW"
+      },
+      {
+        "component": "POSScreen.jsx CustomerSelection dropdown",
+        "issue": "MINOR UX: When the customer-search-dropdown is open, its overlay intercepts pointer events on the register-regular-button and register-member-button below it (button becomes un-clickable until the input loses focus / Tab pressed). Test had to `keyboard.press('Tab')` before the click succeeded. Real users on touch will tap outside first so likely benign, but consider z-index / pointer-events audit or auto-closing the dropdown on button hover.",
+        "selector": "[data-testid=\"customer-search-dropdown\"] overlapping [data-testid=\"register-regular-button\"]",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter28.py",
+    "/app/test_reports/pytest/iter28.xml"
+  ],
+  "action_items": [
+    "CourierDashboard.jsx: replace `useState(INITIAL_MANIFEST)` with `useState([])` and delete the INITIAL_MANIFEST + INITIAL_READY_ORDERS constants (lines 45-105). Wire the JEMPUT manifest to a real backend source (e.g., GET /api/orders?status=Antrian&source=Tamel or dedicated pickup queue) so it shows the empty state when DB is fresh.",
+    "Optional UX: audit customer-search-dropdown pointer-events / z-index so the register-*-button below it stays clickable without needing to blur the input first."
+  ],
+  "critical_code_review_comments": [
+    "models/users.py + db.py RBAC scaffolding is clean — types are Literal-restricted, uuid4 defaults, timezone-aware timestamps. Collections are exposed but no routes yet, matching the 'scaffolding-only' scope.",
+    "receipt_settings.py logo_url has max_length=500 correctly enforced (422 returned for oversized). Consider adding url validation (HttpUrl) so an accidental non-URL string doesn't render broken <img>. Optional.",
+    "TrackingScreen.jsx works well; consider debouncing tracking-search-input filter for large order lists (currently filters synchronously on every keystroke — fine at low volume but O(n) per keystroke).",
+    "POSScreen.jsx: selectedCustomerId state + activeMember/customerProfile keyed by id (not name) correctly gates the profile display. setCustomerName wrapper clears selectedCustomerId on edit (line 800). Autocomplete fix is solid.",
+    "CourierDashboard.jsx line 45-105: DEAD CODE / MOCK LEAK — see UI bug. Also file is 1175 lines, above the 700-line guideline; consider splitting into JemputTab / AntareunTab / manifest helpers."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter28.py (new — 11 regression tests for seed wipe + logo_url + RBAC models)"
+  ],
+  "success_rate": {"backend": "100% (11/11 pytest)", "frontend": "~93% (14/15 scoped checks — CourierDashboard INITIAL_MANIFEST leak is the sole failure)"},
+  "test_credentials": "Admin owner: cookie session_token=test_iter28_token + localStorage laundrymax_session_token=test_iter28_token (mongo user_sessions row inserted for theomahrizal@gmail.com). Staff PIN bypass: sessionStorage staff_pin_ok='true' + staff_pin_id/name/role.",
+  "seed_data_creation": "POST /api/seed/all → orders=0, customers=0, prices=8, b2b_quotas=4, staff=6. Manually created via POS/API: customer 'Andini Test' 6281111222333 (POST /api/customers), customer 'Zaki Persist' 6289990002222 (via SIMPAN PELANGGAN REGULER modal). One test order saved (LND-260817003008-992, 3.0kg, Zaki Persist, Nanti, Rp 21.000) then later wiped via /api/seed/orders.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter-28 clean bill except CourierDashboard.jsx still leaks INITIAL_MANIFEST mock rows (LND-011/012/013) into the JEMPUT tab because manifest state is initialized to that constant. All other iter-28 scope items pass: /tracking route + 7 buckets + detail sheet + search + bucket filter, POS autocomplete FIX (typing shows dropdown but hides profile until click), edit-after-pick clears selection, WA buttons in QR modal, admin logo_url input, backend seed wipe-only + logo_url + RBAC models. To retest the courier fix: wipe orders (POST /api/seed/orders), visit /courier (with staff PIN bypass) → both JEMPUT tab manifest AND ANTAREUN tab ready-list/motor-list should show empty states.",
+  "rca of the issue": "CourierDashboard.jsx line 171 initializes manifest state to a hardcoded array of 3 fake bags: `const [manifest, setManifest] = useState(INITIAL_MANIFEST);` where INITIAL_MANIFEST (lines 45-48) is `[{id:'LND-011',...},{id:'LND-012',...},{id:'LND-013',...}]`. There is no subsequent GET call that would overwrite the manifest with real data, so the mock rows are permanent until the user manually completes pickup for each fake id (impossible — they don't exist in DB). Fix: `useState([])` and either drop the manifest UI entirely or wire it to a real backend query. Root cause is that INITIAL_MANIFEST was left in place when other INITIAL_* mocks were retired in previous iterations."
+}

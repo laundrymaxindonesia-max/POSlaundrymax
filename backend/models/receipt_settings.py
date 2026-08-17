@@ -52,6 +52,11 @@ class ReceiptSettingsBase(BaseModel):
         max_length=160,
     )
     paper_width: str = Field(default="58mm", pattern=r"^(58mm|80mm)$")
+    logo_url: str = Field(
+        default="",
+        max_length=500,
+        description="Optional public image URL rendered on the customer receipt. Blank hides the image slot.",
+    )
 
 
 class ReceiptSettingsUpdate(ReceiptSettingsBase):

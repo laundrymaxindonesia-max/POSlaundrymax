@@ -6,6 +6,7 @@ import CourierDashboard from "@/components/CourierDashboard";
 import AdminDashboard from "@/components/AdminDashboard";
 import PipelineDashboard from "@/components/PipelineDashboard";
 import AttendanceKiosk from "@/components/AttendanceKiosk";
+import TrackingScreen from "@/components/TrackingScreen";
 import AuthCallback from "@/components/auth/AuthCallback";
 import OwnerProtectedRoute from "@/components/auth/OwnerProtectedRoute";
 import StaffPinGate from "@/components/auth/StaffPinGate";
@@ -41,6 +42,14 @@ function AppRouter() {
         element={
           <StaffPinGate>
             <CourierDashboard />
+          </StaffPinGate>
+        }
+      />
+      <Route
+        path="/tracking"
+        element={
+          <StaffPinGate>
+            <TrackingScreen />
           </StaffPinGate>
         }
       />

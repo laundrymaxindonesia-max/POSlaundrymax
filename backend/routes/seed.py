@@ -129,14 +129,9 @@ def _build_seed_orders() -> List[Order]:
 
 
 async def _seed_orders() -> Dict[str, int]:
+    """Wipe orders collection — no demo orders seeded anymore (production-ready)."""
     await orders_col.delete_many({})
-    docs = [serialize_for_mongo(o.model_dump()) for o in _build_seed_orders()]
-    if docs:
-        await orders_col.insert_many(docs)
-    by_status: Dict[str, int] = {}
-    for d in docs:
-        by_status[d["order_status"]] = by_status.get(d["order_status"], 0) + 1
-    return {"inserted": len(docs), "by_status": by_status}
+    return {"inserted": 0, "by_status": {}}
 
 
 # ---------------- PRICES ----------------
@@ -180,18 +175,11 @@ _DEFAULT_CUSTOMERS = [
 
 
 async def _seed_customers() -> Dict[str, int]:
+    """Wipe customers collection — no demo customers seeded anymore.
+    All customers must be created through the POS 'Simpan Pelanggan Reguler'
+    or member registration flow so the DB reflects real business data."""
     await customers_col.delete_many({})
-    now_plus_30 = datetime.now(timezone.utc) + timedelta(days=30)
-    docs = []
-    for row in _DEFAULT_CUSTOMERS:
-        data = dict(row)
-        if data["type"] == "Member":
-            data["quota_expiry_date"] = now_plus_30
-        customer = Customer(**data)
-        docs.append(serialize_for_mongo(customer.model_dump()))
-    if docs:
-        await customers_col.insert_many(docs)
-    return {"inserted": len(docs)}
+    return {"inserted": 0}
 
 
 # ---------------- B2B QUOTAS ----------------

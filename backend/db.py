@@ -31,6 +31,11 @@ staff_col = db["staff"]
 attendance_col = db["attendance"]
 receipt_settings_col = db["receipt_settings"]
 
+# ---- RBAC (Google Auth migration — scaffolding only for now) ----
+users_col = db["users"]
+user_sessions_col = db["user_sessions"]
+role_assignments_col = db["role_assignments"]
+
 
 async def ping() -> bool:
     """Lightweight liveness probe used by /api/health."""

@@ -6,12 +6,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useEffect, useState } from "react";
-import { Printer, Clock, Tag, ClipboardList, FileText } from "lucide-react";
+import { Printer, Clock, Tag, ClipboardList, FileText, MessageCircle, Image as ImageIcon } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 import { toast } from "sonner";
 import { SOURCE_OPTIONS, TIER_STYLE, formatIDR } from "@/components/pos/data";
 import { fetchReceiptSettings } from "@/lib/api";
-import { printReceipt } from "@/lib/receiptPrinter";
+import { printReceipt, openWhatsapp } from "@/lib/receiptPrinter";
 
 export default function QrReceiptModal({
   open,
@@ -49,6 +49,29 @@ export default function QrReceiptModal({
     } else {
       const label = model === "customer" ? "pelanggan" : model === "production" ? "produksi" : "bag tag";
       toast.success(`Nota ${label} dicetak`);
+    }
+  };
+
+  const handleSendWA = (mode) => {
+    if (!printPayload) {
+      toast.error("Data belum siap");
+      return;
+    }
+    const { blocked, missingPhone } = openWhatsapp(printPayload, settings, mode);
+    if (missingPhone) {
+      toast.error("Nomor WA pelanggan kosong", {
+        description: "Simpan pelanggan sebagai reguler lebih dulu agar bisa kirim WA.",
+      });
+      return;
+    }
+    if (blocked) {
+      toast.error("Pop-up WhatsApp diblokir", {
+        description: "Izinkan pop-up untuk domain ini.",
+      });
+    } else {
+      toast.success(
+        mode === "image" ? "WhatsApp dibuka — lampirkan foto nota manual" : "WhatsApp dibuka dengan teks nota"
+      );
     }
   };
 
@@ -150,6 +173,24 @@ export default function QrReceiptModal({
           >
             <Tag size={16} />
             LABEL<br />BAG
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 mt-2">
+          <button
+            onClick={() => handleSendWA("text")}
+            data-testid="wa-send-text-button"
+            className="h-12 rounded-xl border-2 border-[#25D366]/40 bg-[#25D366]/10 hover:bg-[#25D366]/20 hover:border-[#25D366]/70 text-[#25D366] font-heading font-bold text-[11px] tracking-wide flex items-center justify-center gap-1.5 transition-all active:scale-95"
+          >
+            <MessageCircle size={14} strokeWidth={2.5} />
+            KIRIM TEKS KE WA
+          </button>
+          <button
+            onClick={() => handleSendWA("image")}
+            data-testid="wa-send-image-button"
+            className="h-12 rounded-xl border-2 border-[#25D366]/40 bg-[#25D366]/10 hover:bg-[#25D366]/20 hover:border-[#25D366]/70 text-[#25D366] font-heading font-bold text-[11px] tracking-wide flex items-center justify-center gap-1.5 transition-all active:scale-95"
+          >
+            <ImageIcon size={14} strokeWidth={2.5} />
+            KIRIM GAMBAR KE WA
           </button>
         </div>
         <button

@@ -6,6 +6,7 @@ import {
   ShieldCheck,
   LineChart,
   Fingerprint,
+  Search,
 } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 
@@ -13,6 +14,7 @@ const ITEMS = [
   { to: "/", label: "Kasir", Icon: Store, testid: "nav-cashier", ownerOnly: false },
   { to: "/production", label: "Produksi", Icon: Factory, testid: "nav-production", ownerOnly: false },
   { to: "/courier", label: "Kurir", Icon: Truck, testid: "nav-courier", ownerOnly: false },
+  { to: "/tracking", label: "Tracking", Icon: Search, testid: "nav-tracking", ownerOnly: false },
   { to: "/dashboard", label: "Dashboard", Icon: LineChart, testid: "nav-dashboard", ownerOnly: true },
   { to: "/absen", label: "Absensi", Icon: Fingerprint, testid: "nav-absen", ownerOnly: false },
   { to: "/admin", label: "Admin", Icon: ShieldCheck, testid: "nav-admin", ownerOnly: true },

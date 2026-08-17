@@ -62,6 +62,11 @@ import CameraCapture from "@/components/CameraCapture";
 export default function POSScreen() {
   // Customer
   const [customerName, setCustomerName] = useState("");
+  // The customer profile is only "resolved" (i.e. activeMember/customerProfile
+  // populated) when the user EXPLICITLY picks a row from the search dropdown
+  // OR completes the register/regular-save modal. Typing alone no longer
+  // auto-fills profile data.
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
   const [sumberOrder, setSumberOrder] = useState("walkin");
 
   // Tabs
@@ -195,28 +200,27 @@ export default function POSScreen() {
   }, []);
 
   const activeMember = useMemo(() => {
-    const q = customerName.trim().toLowerCase();
-    if (!q) return null;
+    if (!selectedCustomerId) return null;
     return (
-      members.find((m) => m.name.toLowerCase() === q && m.remainingKg > 0) ||
-      null
+      members.find(
+        (m) => m.id === selectedCustomerId && m.remainingKg > 0
+      ) || null
     );
-  }, [customerName, members]);
+  }, [selectedCustomerId, members]);
 
-  // Combined profile lookup for the typed customer name (member OR regular)
+  // Combined profile lookup — resolves ONLY after an explicit pick.
   const customerProfile = useMemo(() => {
-    const q = customerName.trim().toLowerCase();
-    if (!q) return null;
-    const member = members.find((m) => m.name.toLowerCase() === q);
+    if (!selectedCustomerId) return null;
+    const member = members.find((m) => m.id === selectedCustomerId);
     if (member) {
       return { name: member.name, wa: member.wa, address: "", kind: "member" };
     }
-    const reg = regularCustomers.find((c) => c.name.toLowerCase() === q);
+    const reg = regularCustomers.find((c) => c.id === selectedCustomerId);
     if (reg) {
       return { ...reg, kind: "regular" };
     }
     return null;
-  }, [customerName, members, regularCustomers]);
+  }, [selectedCustomerId, members, regularCustomers]);
 
   const selectedSource = SOURCE_OPTIONS.find((s) => s.id === sumberOrder);
   const minKg = selectedSource?.minKg ?? 0;
@@ -548,6 +552,7 @@ export default function POSScreen() {
   const resetAll = () => {
     // Customer + source
     setCustomerName("");
+    setSelectedCustomerId(null);
     setSumberOrder("walkin");
     // Cart data
     setKiloanKg(0);
@@ -715,9 +720,10 @@ export default function POSScreen() {
   const pickCustomerFromSearch = (apiCustomer) => {
     setCustomerName(apiCustomer.name);
     setCustomerSearchOpen(false);
+    setSelectedCustomerId(apiCustomer.id);
     if (apiCustomer.type === "Member") {
       setMembers((prev) => {
-        if (prev.some((m) => m.name.toLowerCase() === apiCustomer.name.toLowerCase())) return prev;
+        if (prev.some((m) => m.id === apiCustomer.id)) return prev;
         return [
           ...prev,
           {
@@ -736,7 +742,7 @@ export default function POSScreen() {
       });
     } else {
       setRegularCustomers((prev) => {
-        if (prev.some((c) => c.name.toLowerCase() === apiCustomer.name.toLowerCase())) return prev;
+        if (prev.some((c) => c.id === apiCustomer.id)) return prev;
         return [
           ...prev,
           {
@@ -787,7 +793,12 @@ export default function POSScreen() {
         <section className="animate-fade-up space-y-3" style={{ animationDelay: "60ms" }}>
           <CustomerSelection
             customerName={customerName}
-            setCustomerName={setCustomerName}
+            setCustomerName={(v) => {
+              setCustomerName(v);
+              // Any manual edit invalidates the previously-picked customer
+              // so we never carry stale profile/quota data forward.
+              if (selectedCustomerId) setSelectedCustomerId(null);
+            }}
             customerSearchOpen={customerSearchOpen}
             setCustomerSearchOpen={setCustomerSearchOpen}
             customerSearchLoading={customerSearchLoading}
@@ -1147,6 +1158,7 @@ export default function POSScreen() {
         onRegister={(newMember) => {
           setMembers((prev) => [...prev, newMember]);
           setCustomerName(newMember.name);
+          setSelectedCustomerId(newMember.id || null);
           setRegisterOpen(false);
           setRegWa("");
         }}
@@ -1190,6 +1202,7 @@ export default function POSScreen() {
               return [...prev, persisted];
             });
             setCustomerName(persisted.name);
+            setSelectedCustomerId(persisted.id);
             toast.success(`Pelanggan ${persisted.name} tersimpan di database`);
           } catch (err) {
             if (err.status === 409) {

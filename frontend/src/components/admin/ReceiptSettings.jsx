@@ -44,6 +44,7 @@ const DEFAULT_SETTINGS = {
   store_phone: "0812-3456-7890",
   footer_message: "Terima kasih! Simpan struk sebagai bukti klaim.",
   paper_width: "58mm",
+  logo_url: "",
 };
 
 // Sample order used for the "Preview cetak" buttons — kept identical shape
@@ -280,6 +281,7 @@ export default function ReceiptSettings() {
             { key: "store_address", label: "Alamat", max: 120 },
             { key: "store_phone", label: "Telp / WA Support", max: 32 },
             { key: "footer_message", label: "Pesan Kaki Nota", max: 160 },
+            { key: "logo_url", label: "URL Logo (opsional, gambar publik)", max: 500 },
           ].map((f) => (
             <label key={f.key} className="block">
               <span className="text-white/50 text-[11px] uppercase tracking-wider font-medium">

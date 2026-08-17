@@ -70,8 +70,12 @@ function renderQrSlot(order) {
 }
 
 function renderLogoSlot(settings) {
+  const logo = settings.logo_url
+    ? `<div class="logo-image"><img src="${escapeHtml(settings.logo_url)}" alt="Logo" /></div>`
+    : "";
   return `
     <div class="logo-block">
+      ${logo}
       <div class="logo-name">${escapeHtml(settings.store_name)}</div>
       <div class="logo-sub">${escapeHtml(settings.store_address)}</div>
       <div class="logo-sub">☎ ${escapeHtml(settings.store_phone)}</div>
@@ -247,6 +251,8 @@ function commonCSS(paperWidth) {
     .qr-block img { display: block; margin: 0 auto; }
     .qr-code { font-size: 10px; margin-top: 2px; letter-spacing: 1px; }
     .logo-block { margin: 4px 0 6px 0; }
+    .logo-image { margin: 0 auto 4px; }
+    .logo-image img { max-width: 60%; max-height: 60px; object-fit: contain; display: block; margin: 0 auto; }
     .logo-name { font-size: 18px; font-weight: 900; letter-spacing: 2px; }
     .logo-sub { font-size: 10px; }
     .divider {
@@ -312,6 +318,7 @@ export function printReceipt(order, model, settings) {
     store_phone: "0812-3456-7890",
     footer_message: "Terima kasih!",
     paper_width: "58mm",
+    logo_url: "",
   };
   const body =
     model === "production"
@@ -355,3 +362,68 @@ export const RECEIPT_MODELS = [
   { id: "production", label: "Slip Produksi", desc: "Tanpa harga, fokus item + kecepatan" },
   { id: "bagtag", label: "Label Bag / Pack", desc: "Untuk tempel di tas cucian" },
 ];
+
+/**
+ * buildWhatsappText — plain-text receipt suited for the wa.me deep link.
+ * Keeps lines short so WhatsApp desktop preview looks readable.
+ */
+export function buildWhatsappText(order, settings) {
+  const s = settings || {};
+  const speed = (order.speedTier || "reguler").toUpperCase();
+  const items = order.items || [];
+  const lines = [];
+  lines.push(`*${s.store_name || "LAUNDRYMAX"}*`);
+  if (s.store_address) lines.push(s.store_address);
+  if (s.store_phone) lines.push(`Telp: ${s.store_phone}`);
+  lines.push("─────────────");
+  lines.push(`Order  : *${order.id || "-"}*`);
+  lines.push(`Tanggal: ${order.dateLabel || nowStamp()}`);
+  lines.push(`Kasir  : ${order.cashier || "-"}`);
+  lines.push(`Nama   : ${order.customer || "-"}`);
+  if (order.phone) lines.push(`No. WA : ${order.phone}`);
+  lines.push(`Kecepatan: ${speed}`);
+  lines.push("─────────────");
+  items.forEach((it) => {
+    lines.push(`• ${it.name} — ${it.qty}  ${formatIDR(it.subtotal)}`);
+  });
+  if (items.length === 0) lines.push("(tidak ada rincian item)");
+  lines.push("─────────────");
+  if (order.discount > 0) {
+    lines.push(`Subtotal : ${formatIDR(order.subtotal)}`);
+    lines.push(`Diskon   : -${formatIDR(order.discount)}`);
+  }
+  lines.push(`*TOTAL   : ${formatIDR(order.total)}*`);
+  lines.push(
+    order.paymentStatus === "lunas"
+      ? "Status  : LUNAS ✅"
+      : "Status  : BAYAR SAAT AMBIL 🕐"
+  );
+  if (s.footer_message) {
+    lines.push("─────────────");
+    lines.push(s.footer_message);
+  }
+  return lines.join("\n");
+}
+
+/**
+ * openWhatsapp — build a wa.me link from the customer's phone and receipt
+ * text. Returns the opened window (or null when the popup is blocked).
+ */
+export function openWhatsapp(order, settings, mode = "text") {
+  const phoneDigits = String(order.phone || "").replace(/\D/g, "");
+  if (!phoneDigits) return { blocked: false, missingPhone: true, window: null };
+  let text;
+  if (mode === "image") {
+    text =
+      `Halo ${order.customer || ""}, berikut nota cucian *${order.id || ""}*.\n` +
+      `Silakan buka link tracking:\nhttps://laundrymax.id/#${order.id || ""}\n\n` +
+      `Total: ${formatIDR(order.total)}\n` +
+      `Status: ${order.paymentStatus === "lunas" ? "LUNAS ✅" : "BAYAR SAAT AMBIL 🕐"}\n\n` +
+      `Screenshot nota akan menyusul dari kasir. Terima kasih!`;
+  } else {
+    text = buildWhatsappText(order, settings);
+  }
+  const url = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(text)}`;
+  const w = window.open(url, "_blank", "noopener");
+  return { blocked: !w, missingPhone: false, window: w };
+}

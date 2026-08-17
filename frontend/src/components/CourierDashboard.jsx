@@ -42,68 +42,6 @@ import { getActorTag, getCurrentStaff } from "@/lib/staffSession";
 import { printReceipt } from "@/lib/receiptPrinter";
 import { Printer as PrinterIcon, FileText, ClipboardList, Tag } from "lucide-react";
 
-const INITIAL_MANIFEST = [
-  { id: "LND-011", customer: "Tamel", weight: "2.5 kg", time: "11:02" },
-  { id: "LND-012", customer: "Tamel", weight: "3.0 kg", time: "11:05" },
-  { id: "LND-013", customer: "Tamel", weight: "1.5 kg", time: "11:08" },
-];
-
-const INITIAL_READY_ORDERS = [
-  {
-    id: "LND-005",
-    customer: "Kosan Wins",
-    address: "Jl. Cisitu Lama No. 24, Dago",
-    phone: "0812-xxxx-4488",
-    eta: "15 menit",
-    items: "4 pcs · Kiloan",
-    total: "Rp 32.000",
-    paymentStatus: "lunas",
-  },
-  {
-    id: "LND-006",
-    customer: "Rina Permata",
-    address: "Jl. Tubagus Ismail VIII No. 7",
-    phone: "0821-xxxx-1223",
-    eta: "22 menit",
-    items: "2 pcs · Satuan",
-    total: "Rp 30.000",
-    paymentStatus: "nanti",
-  },
-  {
-    id: "LND-007",
-    customer: "Apartemen Gateway Pasteur",
-    address: "Tower C Unit 1402",
-    phone: "0813-xxxx-9012",
-    eta: "35 menit",
-    items: "6 pcs · Kiloan + Jas",
-    total: "Rp 76.000",
-    paymentStatus: "nanti",
-  },
-  {
-    id: "LND-008",
-    customer: "Bapak Hendra",
-    address: "Jl. Dipatiukur No. 115",
-    phone: "0815-xxxx-7766",
-    eta: "28 menit",
-    items: "3 pcs · Kiloan",
-    total: "Rp 0 · Membership",
-    paymentStatus: "lunas",
-  },
-];
-
-const INITIAL_ON_MOTOR = [
-  {
-    id: "LND-004",
-    customer: "Ratna Dewi",
-    address: "Jl. Sukajadi No. 89A",
-    phone: "0817-xxxx-3344",
-    eta: "8 menit",
-    items: "5 pcs · Kiloan + Sepatu",
-    total: "Rp 60.000",
-    paymentStatus: "lunas",
-  },
-];
-
 function mapBackendOrder(o) {
   const eta = Math.max(3, Math.min(30, Math.round((o.weight_kg || 3) * 2))) + " menit";
   const itemsDesc = o.items_detail
@@ -168,7 +106,7 @@ function buildCourierPrintPayload(order) {
 
 export default function CourierDashboard() {
   const [activeTab, setActiveTab] = useState("pickup");
-  const [manifest, setManifest] = useState(INITIAL_MANIFEST);
+  const [manifest, setManifest] = useState([]);
   const [readyOrders, setReadyOrders] = useState([]);
   const [onMotorOrders, setOnMotorOrders] = useState([]);
   const [loading, setLoading] = useState(true);
