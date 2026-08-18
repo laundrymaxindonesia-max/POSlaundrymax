@@ -16,11 +16,15 @@ import {
   MapPin,
   ChevronLeft,
   ChevronRight,
+  Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 import HeaderNav from "@/components/HeaderNav";
 import { fetchOrders } from "@/lib/api";
 import CustomerHistoryModal from "@/components/tracking/CustomerHistoryModal";
+import ReceiptPickerModal, {
+  orderToPrintPayload,
+} from "@/components/print/ReceiptPickerModal";
 
 /**
  * Seven status buckets shown as counter badges. Order + labels intentionally
@@ -76,6 +80,7 @@ export default function TrackingScreen() {
   const [page, setPage] = useState(1);
   const [customerHistoryName, setCustomerHistoryName] = useState(null);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [reprintOrder, setReprintOrder] = useState(null);
 
   const load = async () => {
     setRefreshing(true);
@@ -513,6 +518,14 @@ export default function TrackingScreen() {
             )}
 
             <button
+              onClick={() => setReprintOrder(selected)}
+              data-testid="tracking-reprint-button"
+              className="w-full h-11 mt-2 rounded-xl bg-[#FFD700]/15 border border-[#FFD700]/40 hover:bg-[#FFD700]/25 hover:border-[#FFD700]/70 text-[#FFD700] font-heading font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 transition"
+            >
+              <Printer size={13} strokeWidth={2.5} />
+              Cetak Ulang Nota
+            </button>
+            <button
               onClick={() => setSelected(null)}
               data-testid="tracking-detail-close"
               className="w-full h-11 mt-2 rounded-xl bg-white/[0.04] border border-white/10 text-white/70 font-medium hover:bg-white/10 hover:text-white transition-colors"
@@ -528,6 +541,14 @@ export default function TrackingScreen() {
           customerName={customerHistoryName}
           orders={orders}
           onClose={() => setCustomerHistoryName(null)}
+        />
+      )}
+
+      {reprintOrder && (
+        <ReceiptPickerModal
+          order={orderToPrintPayload(reprintOrder)}
+          title="Cetak Ulang Nota"
+          onClose={() => setReprintOrder(null)}
         />
       )}
     </div>

@@ -427,3 +427,84 @@ export function openWhatsapp(order, settings, mode = "text") {
   const w = window.open(url, "_blank", "noopener");
   return { blocked: !w, missingPhone: false, window: w };
 }
+
+/**
+ * buildReceiptTextLines — plain-text (no HTML) rendering of a receipt for
+ * one of the 3 models. Used both as the visible content of the preview
+ * modal AND as the ESC/POS body sent to a BT thermal printer.
+ * Returns { header: string[], body: string[], footer: string[] }.
+ */
+export function buildReceiptTextLines(order, model, settings) {
+  const s = settings || {};
+  const header = [];
+  const body = [];
+  const footer = [];
+  const paperWidth = s.paper_width === "80mm" ? 42 : 32; // chars per line
+
+  const pad = (label, value) => {
+    const l = String(label);
+    const v = String(value);
+    if (l.length + v.length + 1 >= paperWidth) return `${l}\n  ${v}`;
+    return l + " ".repeat(paperWidth - l.length - v.length) + v;
+  };
+  const divider = () => "-".repeat(paperWidth);
+
+  // Header
+  header.push((s.store_name || "LAUNDRYMAX").toUpperCase());
+  if (s.store_address) header.push(s.store_address);
+  if (s.store_phone) header.push("Telp: " + s.store_phone);
+
+  // Body
+  body.push(divider());
+  body.push(pad("Order", order.id || "-"));
+  body.push(pad("Tanggal", order.dateLabel || ""));
+  if (order.cashier) body.push(pad("Kasir", order.cashier));
+  body.push(pad("Nama", order.customer || "-"));
+  if (order.phone) body.push(pad("No. WA", order.phone));
+  body.push(pad("Kecepatan", (order.speedTier || "reguler").toUpperCase()));
+  body.push(divider());
+
+  if (model === "bagtag") {
+    body.push("");
+    body.push(`  BAG ${order.bagIndex || 1} / ${order.bagTotal || 1}`);
+    body.push("");
+    if (order.notes) body.push("Catatan: " + order.notes);
+  } else if (model === "production") {
+    (order.items || []).forEach((it) =>
+      body.push(`- ${it.name} (${it.qty})`)
+    );
+    if ((order.items || []).length === 0) body.push("(tidak ada item)");
+    body.push(divider());
+    body.push("*** SLIP PRODUKSI ***");
+    body.push("JANGAN DIBERIKAN KE PELANGGAN");
+    if (order.notes) {
+      body.push(divider());
+      body.push("Catatan: " + order.notes);
+    }
+  } else {
+    // customer
+    (order.items || []).forEach((it) =>
+      body.push(pad(`${it.name} (${it.qty})`, formatIDR(it.subtotal)))
+    );
+    body.push(divider());
+    if (order.discount > 0) {
+      body.push(pad("Subtotal", formatIDR(order.subtotal)));
+      body.push(pad("Diskon", "-" + formatIDR(order.discount)));
+    }
+    body.push(pad("TOTAL", formatIDR(order.total)));
+    body.push(
+      order.paymentStatus === "lunas"
+        ? ">>> LUNAS <<<"
+        : ">>> BAYAR SAAT AMBIL <<<"
+    );
+  }
+
+  // Footer
+  if (model === "customer" && s.footer_message) {
+    footer.push(s.footer_message);
+  }
+  if (model !== "bagtag") {
+    footer.push("Order: " + (order.id || ""));
+  }
+  return { header, body, footer };
+}

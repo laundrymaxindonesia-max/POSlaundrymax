@@ -6,7 +6,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, History, Phone } from "lucide-react";
+import { Loader2, History, Phone, Printer } from "lucide-react";
+import ReceiptPickerModal, {
+  orderToPrintPayload,
+} from "@/components/print/ReceiptPickerModal";
 
 const formatIDR = (n) =>
   "Rp " + Math.round(Number(n) || 0).toLocaleString("id-ID").replace(/,/g, ".");
@@ -44,6 +47,7 @@ export default function CustomerHistoryModal({ customerName, orders, onClose }) 
   // TrackingScreen already loads up to 500 orders sorted by created_at,
   // so filtering client-side is more than enough for real shops.
   const [loading] = useState(false);
+  const [reprintOrder, setReprintOrder] = useState(null);
 
   const rows = useMemo(() => {
     const seen = new Set();
@@ -113,10 +117,11 @@ export default function CustomerHistoryModal({ customerName, orders, onClose }) 
           </div>
 
           <div className="rounded-2xl border border-white/10 overflow-hidden">
-            <div className="grid grid-cols-[70px_1fr_80px] gap-2 text-[9px] uppercase tracking-widest text-white/40 px-3 py-2 border-b border-white/5 bg-white/[0.02]">
+            <div className="grid grid-cols-[70px_1fr_80px_36px] gap-2 text-[9px] uppercase tracking-widest text-white/40 px-3 py-2 border-b border-white/5 bg-white/[0.02]">
               <div>Tanggal</div>
               <div>Order</div>
               <div className="text-right">Total</div>
+              <div></div>
             </div>
             <div
               className="max-h-72 overflow-y-auto"
@@ -136,7 +141,7 @@ export default function CustomerHistoryModal({ customerName, orders, onClose }) 
                   <div
                     key={o.order_id}
                     data-testid={`history-row-${o.order_id}`}
-                    className="grid grid-cols-[70px_1fr_80px] gap-2 items-center px-3 py-2 border-b border-white/5 last:border-0 text-xs"
+                    className="grid grid-cols-[70px_1fr_80px_36px] gap-2 items-center px-3 py-2 border-b border-white/5 last:border-0 text-xs"
                   >
                     <div className="text-white/50 text-[10px]">
                       {formatDate(o.created_at)}
@@ -167,6 +172,14 @@ export default function CustomerHistoryModal({ customerName, orders, onClose }) 
                     <div className="text-right font-mono text-[#FFD700] font-bold">
                       {formatIDR(o.total_price)}
                     </div>
+                    <button
+                      onClick={() => setReprintOrder(o)}
+                      data-testid={`history-reprint-${o.order_id}`}
+                      title="Cetak ulang nota"
+                      className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 hover:border-[#FFD700]/40 text-white/60 hover:text-[#FFD700] flex items-center justify-center"
+                    >
+                      <Printer size={11} />
+                    </button>
                   </div>
                 ))
               )}
@@ -181,6 +194,14 @@ export default function CustomerHistoryModal({ customerName, orders, onClose }) 
             Tutup
           </button>
         </div>
+
+        {reprintOrder && (
+          <ReceiptPickerModal
+            order={orderToPrintPayload(reprintOrder)}
+            title="Cetak Ulang Nota"
+            onClose={() => setReprintOrder(null)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
